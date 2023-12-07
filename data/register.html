@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LoRaLink-Web Registration</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" type="text/css" href="./main.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap-select.min.css">
+        
+        <script src="/jquery-3.7.0.min.js"></script>
+        <script src="/bootstrap.bundle.min.js"></script>
+        <script src="/bootstrap-select.min.js"></script>
+        <script src="/jquery.dataTables.min.js"></script>
+        <script src="/dataTables.bootstrap4.min.js"></script>
+        <script src="/popper.js"></script>
+        <script src="/crypto-js_4.1.1_core.min.js"></script>
+        <script src="/crypto-js_4.1.1_md5.js"></script>
+        
+        
+        <script src="./register.js"></script>
+    </head>
+    <body id="body">
+        <div style="color: white;">
+            <h1>Account registration</h1>
+            <br/>
+            <p>
+                To register an account you need to be at least 14 years old 
+                (or whatever you need to be to access messaging services)...
+                <br/>
+                With your registration you agree to the following terms of service:<br/>
+                <br/>
+                This service is provided as it is, it may work, or it may not work.<br/>
+                <br/>
+                Keep in mind, that this site is hosted on a micro controller, which may be powered by solar energy and may not be available all the time (read the f***ing 
+                "<a class="linkLogin" href="./about.html">What's this?</a>" section...<br/>
+                <br/>
+                This network does not provide any additional services: No password recovery, no data recovery, nothing (ask the node owner)...<br/>
+                The network does not encrypt or secure your data, if you need it, you should use something else!<br/>
+                This node is owned by someone, who provides the access, so be patient and don't argue with the nodes owner...<br/>
+                The network shall not be used for illegal actions!<br/>
+                Please make sure, that you reed the "<a class="linkLogin" href="./about.html">What's this?</a>" section, to understand, what this service is and how it works!<br/>
+                
+                <br/>
+                <br/>
+                <h1>New User registration:</h1>
+            </p>
+        </div>
+        
+        <center>
+            <div id="regPanel">
+                <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                    <label for="txtUsername">Username:</label>
+                    <input id="txtUsername" type="text" class="form-control" placeholder="Username" aria-label="Username" maxlength="24">
+                    <br/>
+                    <small class="form-text text-muted">Your user name, must be unique on the device!</small>
+                </div>
+
+                <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                    <label for="txtPassword">Password:</label>
+                    <input id= "txtPassword" type="password" class="form-control" placeholder="Password" aria-label="Password">
+                    <br/>
+                    <small class="form-text text-muted">Your password, don't forget it, the device owner can only reset it, if he want to... Only a hash of your password will be stored...</small>
+                </div>
+
+                <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                    <label for="txtPasswordConf">Retype Password:</label>
+                    <input id="txtPasswordConf" type="password" class="form-control" placeholder="Password" aria-label="Retype Password">
+                </div>
+
+                <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                    <label for="txtMail">Mail address:</label>
+                    <input id="txtMail" type="text" class="form-control" placeholder="E-Mail" aria-label="Mail" maxlength="99">
+                    <br/>
+                    <small class="form-text text-muted">An E-Mail address to contact you. Contact will only be made manually by the node owner... Used to forward messages to your mail address (if configured)... We don't care if it exist, or empty - you can change it later...</small>
+                </div>
+
+                <div class="form-group w-100" style="margin-left: 2px; margin-right:2px;">
+                    <button id="btnRegister" type="button" class="btn btn-primary" onclick="javascript: btnRegister_Click();">Register</button>
+                </div>
+            </div>
+        </center>
+        
+        <!-- Wait Dialog -->
+        <div id="dlgWait" class="dlgWait" style="display: none;">
+            <div class="row">
+                <div class="col-3">
+                    <img style="margin-left: 4px; margin-top: 6px;" src="./waiting.png" alt="" width="40" height="40"/>
+                </div>
+                
+                <div class="col-9">
+                    <p style="font-size: 20px; color: white; margin-top: 12px;">Please wait...</p>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <p id="lblDesc" style="font-size: 12px; color: white; margin-top: 10px; margin-left: 5px;"></p>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,35 @@
+/*
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/css.css to edit this template
+*/
+/* 
+    Created on : 12.06.2023, 13:13:43
+    Author     : cwallukat
+*/
+
+#tabConfig {
+    margin-left:10px;/* half width*/
+    margin-right:10px;/* half width*/
+    margin-top:20px;/* half height*/
+    z-index: 200;
+    background-color: white;
+    border: 2px solid black;
+}
+
+
+#mnuUserManagement {
+    display: none;
+    vertical-align: center;
+    background-color: #cccccc;
+    border-radius: 15px;
+    width: 300px;
+    height: 200px;
+    z-index: 100;
+    position: relative;
+}
+
+
+#btnSaveConfigFiles {
+    margin-bottom: 12px;
+    margin-left: 10px;
+}

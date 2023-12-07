@@ -1,0 +1,101 @@
+/*
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/css.css to edit this template
+*/
+/* 
+    Created on : 01.12.2023, 16:33:01
+    Author     : cwallukat
+*/
+
+.radar {
+  position: relative;
+  overflow: hidden;
+  width: 300px;
+  aspect-ratio: 1;
+  background: #000 url(./radar_background.png) center / cover;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: inherit;
+  aspect-ratio: inherit;
+  background: url(./radar_beam.png) center / cover;
+  animation: 5s rotate linear infinite;  
+}
+
+.course {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: inherit;
+  aspect-ratio: inherit;
+  background: url(./radar_course.png) center / cover; 
+}
+
+@keyframes rotate {
+  100% {
+    rotate: 1turn;
+  }
+}
+
+.dotGreen {
+  position: absolute;
+  left: calc(var(--x) * 100%);
+  top: calc(var(--y) * 100%);
+  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  background: #cf5;
+  box-shadow: 0 0 10px 5px rgba(100, 255, 0, 0.5);
+  opacity: 0;
+}
+
+
+.dotBoxGreen {
+    border: 1px solid #cf5;
+    color: #cf5;
+    opacity: 1;
+    width: 50px;
+    height: 14px;
+    font-size: 13px;
+    overflow: hidden;
+};
+
+.dotBoxGreen span {
+    margin-left: 3px;
+    margin-right: 3px;
+    font-size: 13px;
+    overflow: hidden;
+}
+
+.dotRed {
+  position: absolute;
+  left: calc(var(--x) * 100%);
+  top: calc(var(--y) * 100%);
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -5px;
+  background: red;
+  box-shadow: 0 0 10px 5px rgba(100, 255, 0, 0.5);
+  opacity: 0;
+}
+
+
+.tbNodeDetails {
+    font-size: 10px;
+}
+
+.tbNodeDetails thead td {
+    background-color: lightgray;
+    color: black;
+    border-bottom: 1px solid darkgrey;
+    border-right: 1px solid darkgrey;
+    margin-left: 35px;
+    margin-right: 4px;
+}

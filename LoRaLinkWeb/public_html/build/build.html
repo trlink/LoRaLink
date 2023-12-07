@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>LoraLink - Build your own node</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+        <h1>Prerequisites</h1>
+        <br/>
+        <p>
+            You need a T-Beam and a SD-Card or an ESP32 with GPS RX Module and a SD-Card.<br/>
+            <br/>
+            You can solder the SD-Adapter directly to the ESP or T-Beam to get rid of the SD-Shield (take care of wiring):<br/>
+            <br/>
+            https://www.hackster.io/superturis/make-your-own-sd-shield-101fd7 <br/>
+            <br/>
+        </p>
+        
+        <h2>T-Beam Pinout</h2>
+        
+        <table>
+            <thead>
+                <td>Name</td>
+                <td>Pin</td>
+            </thead>
+            
+            <tr>
+                <td>VCC</td>
+                <td>3.3v</td>
+            </tr>
+            
+            <tr>
+                <td>GND</td>
+                <td>Any GND</td>
+            </tr>
+            
+            <tr>
+                <td>MISO</td>
+                <td>4</td>
+            </tr>
+            
+            <tr>
+                <td>MOSI</td>
+                <td>25</td>
+            </tr>
+            
+            <tr>
+                <td>CS</td>
+                <td>2</td>
+            </tr>
+            
+            <tr>
+                <td>SCK</td>
+                <td>13</td>
+            </tr>
+        </table>
+        
+        <p>
+            The project was written with the Arduino IDE, so you need to install the Arduino IDE and the ESP-Toolchain.<br/>
+            After Installation install the following libraries:<br/>
+            <br/>
+            - NTPClient 3.2.1<br/>
+            - SD 1.2.4<br/>
+            - Adafruit SSD1306 2.5.7<br/>
+            - ArduinoJson 6.19.4<br/>
+            - Bounce2 2.71.0<br/>
+            - DS3231 1.1.0<br/>
+            - TinyGPS 13.0.0<br/>
+            - EasyDDNS 1.8.0<br/>
+            <br/>
+            Libs from Github:<br/>
+            <br/>
+            - https://github.com/StuartsProjects/SX12XX-LoRa <br/>
+            - https://github.com/trlink/WSFFileDB <br/>
+            - https://github.com/trlink/ESP32_HTTPS_Server <br/>
+            <br/>
+            <br/>
+            After installation take the SD-Card and copy the content of the Web-Application in the root directory 
+            of the SD-Card. This makes the life easier, when you solder the SD-Card (or the Micro SD adapter) 
+            directly to the ESP)... <br/>
+            <br/>
+            The Pins are defined in the file HardwareConfig for the 3 supported microcontrollers:<br/>
+            <br/>
+            - T-Beam<br/>
+            - Heltec ESP32<br/>
+            - Liligo LoRa devices<br/>
+            <br/>
+            Even if supported, do not use SPIFFS, since I run into problems storing and modifying the data on the FS...<br/>
+            LittleFS has problems when it is called from different threads (which I do)...<br/>
+            <br/>
+        </p>
+        <h1>Compile & Flash</h1>
+        <br/>
+        <p>
+            Go to the file HardwareConfig.h and set the options acording to your device. There are enough comments in it.<br/>
+            <br/>
+            Compile & flash the ESP, the compilation will take some time, after the device was flashed, the hard task is finished...<br/>
+            <br/>
+        </p>
+        <h1>Configuration / Quick Setup</h1>
+        <br/>
+        After the ESP is booted, it will create an open access point, connect to it and browse to: http://192.168.5.1/administration.html <br/>
+        The default user is admin with an empty password, you should change it asap...<br/>
+        After the data was loaded, select "Settings" in the left panel and set the Device Node ID to something which is not in use and not 0!<br/>
+        Give the device a name under "Device Name" (don't use blanks or special chars).<br/>
+        You can play later with this settings...<br/>
+        <br/>
+        Switch to the Tab "LoRa TRX Settings":<br/>
+        <br/>
+        Set the Frequency to something according to your countrys regulations and the 
+        used ESP (doesn't make sense to set a 70cm frequency on a 800Mhz LoRa variant)...<br/>
+        Remove the checkmark from "Disable LoRa Modem".<br/>
+        Leave the other settings untouched, otherwise you know, what to set...<br/>
+        <br/>
+        Select the "Device" Tab on the left panel and click on "Reset Device".<br/>
+        If you have a network in reach, the device should connect automatically.<br/>
+    </body>
+</html>

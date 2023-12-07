@@ -1,0 +1,56 @@
+#body {
+    background-color: black; 
+    background-image: url('/readybackground.jpg');
+    background-repeat: no-repeat;
+    background-size: cover;
+} 
+
+
+#loginPanel {
+    width: 200px;
+    height: 120px;
+    position:absolute;
+    top:50%;
+    left:50%;
+    margin-left:-100px;/* half width*/
+    margin-top:-60px;/* half height*/
+}
+
+#dlgWait {
+    width: 200px;
+    height: 120px;
+    position:absolute;
+    top:50%;
+    left:50%;
+    margin-left:-100px;/* half width*/
+    margin-top:-60px;/* half height*/
+    z-index: 100;
+    background-color: darkgreen;
+    border: 4px solid white;
+}
+
+
+.linkLogin {
+    white-space: nowrap; 
+    color: white;
+}
+
+.linkLogin:visited {
+    white-space: nowrap; 
+    color: white;
+}
+
+
+#btnLogin {
+    width: 150px;
+    margin-left:25px;
+    position: relative;
+}
+
+
+#regPanel {
+    width: 300px;
+    background-color: #f0f0f0;
+    border: 4px solid white;
+    margin-left:25px;
+}

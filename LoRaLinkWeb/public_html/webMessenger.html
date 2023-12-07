@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>LoRaLink-Web</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" type="text/css" href="./webMessenger.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap-select.min.css">
+        <link href="radar.css" rel="stylesheet" type="text/css"/>
+        
+        <script src="/jquery-3.7.0.min.js"></script>
+        <script src="/bootstrap.bundle.min.js"></script>
+        <script src="/bootstrap-select.min.js"></script>
+        <script src="/popper.js"></script>
+        <script src="/crypto-js_4.1.1_core.min.js"></script>
+        <script src="/crypto-js_4.1.1_md5.js"></script>
+        
+        <script src="./webMessenger.js"></script>
+    </head>
+    <body id="body" onresize="javascript: resizeWindow();">
+        <input type="hidden" id="hfPwdHash" name="hfUserPwdHash" value="">
+        <input type="hidden" id="hfUser" name="hfUser" value="">
+        <input type="hidden" id="hfUserID" name="hfUserID" value="">
+        <input type="hidden" id="hfSelectedChatID" name="hfSelectedChatID" value="">
+        
+        
+        <nav id="navMainMenu" class="navbar navbar-fixed-top navbar-dark bg-primary navbar-expand-lg">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarTogglerDemo01" aria-controls="navbarTogglerDemo01" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarTogglerDemo01">
+                <a class="navbar-brand" href="#">
+                    <img src="./LoRaBlack.png" width="30" height="30" alt="logo">
+                    LoRa-Link
+                </a>
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                          New
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showNewChatDialog();">Chat</a>
+                        </div>
+                    </li>  
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="javascript: $('.navbar-toggler').click(); showShoutOut();">Shout Out</a>
+                    </li>
+                    <li class="nav-item dropdown" id="mnuItemGPS">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLinkGps" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                          GPS Tracking
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(0);">Enable</a>
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(1);">Enable - Emergency</a>
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); disableGpsTracking();">Disable</a> 
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showRadar();">Show Radar</a> 
+                        </div>
+                    </li>
+                </ul>
+                <ul class="nav navbar-nav ml-auto">
+                    <li>
+                        <img id="imgLocationTracking" src="" class="img-responsive" width="30px">
+                    </li>
+                    
+                    <li>
+                        <img id="imgGpsState" src="" class="img-responsive" width="30px">
+                    </li>
+                    
+                    <li>
+                        <img id="imgConnState" src="" class="img-responsive" width="30px" style="margin-left: 8px;">
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        
+        
+        <div id="dlgRadar" class="modal fade dlgRadar" tabindex="-1" role="dialog" aria-labelledby="RadarModalLongTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="RadarModalLongTitle">GPS Radar</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="divRadar" style="">
+                            <div class="close" style="float: right;">
+                                <span>Range: <span id="lblRadarRange"></span>m</span> 
+                            </div>
+
+                            <div class="radar" id="radar">
+                                <div class="beam"></div>
+                                <div class="course"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <span>Max Range:</span>
+                            <input id="mulRadarRange" class="multi-range" type="range" style="width: 100%;" onchange="javascript: g_pRadar.setMaxRadius(this.value);"/>
+                        </div>
+                        
+                        <table id="tbNodeDetails" class="tbNodeDetails">
+                            <thead>
+                                <tr>
+                                    <td>Node ID</td>
+                                    <td>Node Name</td>
+                                    <td>Latitude</td>
+                                    <td>Longitude</td>
+                                    <td>Speed</td>
+                                    <td>Course</td>
+                                    <td>Distance</td>
+                                </tr>
+                            </thead>
+                            
+                            <tbody id="tbNodeDetailsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+        <div id="divMain" class="divMain">    
+            <div id="divMainLeftPane">
+                <table id="tbChats">
+                    <thead>
+                        <tr>
+                            <div class="form-group has-search">
+                                <input id="inpSearchChat" type="text" class="form-control" placeholder="Search Chat">
+                            </div>
+                        </tr>
+                    </thead>
+                    
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="divMainRightPane">
+                <table id="tbShoutOut" style="display: none; width: 100%;">
+                    <thead style="height: 65px;" class="msgHeaderRow">
+                        <tr>
+                            <td colspan="3">
+                                <div class="row">
+                                    <div class="col-8">
+                                        <b><p>Shout Out</p></b>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="float-right">
+                                            <table style="table-layout: fixed;">
+                                                <tr>
+                                                    <td id="tbBackBtn2"><img id="imgShoutOutBack" style="margin-left: 10px;" src="" width="40" height="40" alt="back" onclick="javascript: toggleMessageView(false);"/></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><b>Time:</b></td>
+                            <td><b>User:</b></td>
+                            <td><b>Message:</b></td>
+                        </tr>
+                    </thead>
+                    
+                    <tbody id="tbShoutOutMsgsBody">
+                    </tbody>
+                    
+                    <tfoot>
+                        <tr style="border-top: 1px solid grey;">
+                            <td colspan="3">
+                                <div style="margin-left: 2px; margin-right:2px;">
+                                    <textarea style="float: left;" class="form-control" id="txtMsgTextShoutOut" placeholder="Enter message..." maxlength="150" rows="1"></textarea>
+                                    <button style="float: right;" id="btnSendShoutoutMsg" type="button" class="btn btn-primary" onclick="javascript: sendMessageShoutOut();">Shout Out</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <table id="tbChatMsgs" style="display: none; width: 100%;">
+                    <thead style="height: 125px;" class="msgHeaderRow">
+                        <tr>
+                            <td>
+                                <div class="row">
+                                    <div class="col-8">
+                                        <b><p id="lblChatName"></p></b>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="float-right">
+                                            <table style="table-layout: fixed;">
+                                                <tr>
+                                                    <td><img id="imgDeleteMsgs" src="" width="40" height="40" alt="delete chat" onclick="javascript: deleteMsgs($('#hfSelectedChatID').val());"/></td>
+                                                    <td>
+                                                        <img id="imgBlockContact" src="" width="40" height="40" alt="block contact" onclick="javascript: blockContact($('#hfSelectedChatID').val(), 1);"/>
+                                                        <img id="imgUnBlockContact" src="" width="40" height="40" alt="unblock contact" onclick="javascript: blockContact($('#hfSelectedChatID').val(), 0);"/>
+                                                    </td>
+                                                    <td>
+                                                        <img id="imgAllowPosTracking" src="" width="40" height="40" alt="allow pos tracking" onclick="javascript: allowPosTrackingContact($('#hfSelectedChatID').val(), 1);"/>
+                                                        <img id="imgDisallowPosTracking" src="" width="40" height="40" alt="disallow pos tracking" onclick="javascript: allowPosTrackingContact($('#hfSelectedChatID').val(), 0);"/>
+                                                    </td>
+                                                    <td id="tbBackBtn"><img id="imgMsgsBack" style="margin-left: 10px;" src="" width="40" height="40" alt="back" onclick="javascript: toggleMessageView(false);"/></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="divEncryptMsgs" class="row" style="margin-top: 15px;">
+                                    <div class="col form-group" style="margin-left: 2px; margin-right:2px; position: relative;  margin-top: 6px;">
+                                        <input style="margin-left: 0px; margin-top: 7px;" class="form-check-input" type="checkbox" value="" id="chkEncryptMessage" aria-describedby="" onclick="javascript:
+                                            if($('#chkEncryptMessage').prop('checked') === true) {
+                                                $('#txtChatPassword').show();
+                                                $('#txtChatPassword').val('');
+                                            }
+                                            else {
+                                                $('#txtChatPassword').hide();
+                                                $('#txtChatPassword').val('');
+                                            };
+                                        ">
+                                        <label style="margin-left: 15px;" class="form-check-label" for="chkEncryptMessage">
+                                          Use End-to-end encryption?
+                                        </label>
+                                    </div>
+                                    <div class="col">
+                                        <input type="password" maxlength="30" class="form-control" id="txtChatPassword" aria-describedby="" placeholder="Encryption key" style="display: none;" onfocusout="javascript: if($('#txtChatPassword').val().length >= 4) { loadChatMsgs($('#hfSelectedChatID').val()); };">
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </thead>
+                    
+                    <tbody id="tbChatMsgsBody">
+                    </tbody>
+                    
+                    <tfoot>
+                        <tr>
+                            <td>
+                                <table style="width:100%; margin-top: 20px;">
+                                    <tr class="rowChatFooterTop">
+                                        <td>
+                                            <textarea class="form-control" id="txtMsgText2" placeholder="Enter message..." maxlength="1500" rows="3"></textarea>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-right">
+                                            <button id="btnSendMessage2" type="button" class="btn btn-primary" onclick="javascript: sendMessage2();">Send Message</button>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        
+
+        
+        <!-- Wait Dialog -->
+        <div id="dlgWait" class="dlgWait" style="display: none;">
+            <div class="row">
+                <div class="col-3">
+                    <img style="margin-left: 4px; margin-top: 6px;" src="./waiting.png" alt="" width="40" height="40"/>
+                </div>
+                
+                <div class="col-9">
+                    <p style="font-size: 20px; color: white; margin-top: 12px;">Please wait...</p>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <p id="lblDesc" style="font-size: 12px; color: white; margin-top: 10px; margin-left: 5px;"></p>
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- new chat message -->
+        <div id="dlgNewChat" class="modal fade dlgNewChat" tabindex="-1" role="dialog" aria-labelledby="NewMsgModalLongTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="NewMsgModalLongTitle">New Chat</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                            <label for="lblMsgTo">Message To:</label>
+                            <input type="text" class="form-control" id="txtMsgTo" aria-describedby="lblMsgTo" placeholder="" maxlength="50" autocomplete="off" onKeyUp="javascript: showRcptResults(this.value);" onfocusout="javascript: checkContact(this.value);">
+                            <div id="divRcptResult"></div>
+                            <small id="txtToHelp" class="form-text text-muted">Name of the recipient (user@device)</small>
+                        </div>
+
+                        <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                            <label for="lblMsgText">Message Text:</label>
+                            <textarea class="form-control" id="txtMsgText" aria-describedby="lblMsgTextHelp" placeholder="" maxlength="1500" rows="6" onkeyup="javascript: updateMessageLabel();"></textarea>
+                            <small id="txtMsgTextHelp" class="form-text text-muted">Message text, 1500 chars max.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button id="btnSendMessage" type="button" class="btn btn-primary" onclick="javascript: sendMessage();">Send Message</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

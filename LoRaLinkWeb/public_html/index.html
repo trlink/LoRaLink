@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LoRaLink-Web</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" type="text/css" href="./main.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="./bootstrap-select.min.css">
+        
+        <script src="/jquery-3.7.0.min.js"></script>
+        <script src="/bootstrap.bundle.min.js"></script>
+        <script src="/bootstrap-select.min.js"></script>
+        <script src="/jquery.dataTables.min.js"></script>
+        <script src="/dataTables.bootstrap4.min.js"></script>
+        <script src="/popper.js"></script>
+        <script src="/crypto-js_4.1.1_core.min.js"></script>
+        <script src="/crypto-js_4.1.1_md5.js"></script>
+        <script src="./main.js"></script>
+    </head>
+    <body id="body">
+        <input type="hidden" id="hfPwdHash" name="hfAdminPwdHash" value="">
+        <input type="hidden" id="hfUser" name="hfAdminUser" value="">
+        
+        <table style="position: absolute; left: 0px; top: 2px; width: 100%;">
+            <tr>
+                <td class="text-right">
+                    <p style="color: white; padding-right: 10px;" id="NodeOwner"></p>
+                </td>
+            </tr>>
+            <tr>
+                <td class="text-right">
+                    <p style="color: white; padding-right: 10px;" id="NodeName"></p>
+                </td>
+            </tr>>
+        </table>
+        
+        <!-- Login panel -->
+
+        <div id="loginPanel">
+            <form name="frmLRLogin" target="#" method="get" onsubmit="javascript: btnLogin_Click(); return false;">
+                <div class="input-group mb-3">
+                    <input id="txtUsername" type="text" class="form-control" placeholder="Username" aria-label="txtUsername">
+                </div>
+
+                <div class="input-group mb-3">
+                    <input id="txtPassword" type="password" class="form-control" placeholder="Password" aria-label="txtPassword">
+                </div>
+
+                <div class="input-group mb-3 w-100">
+                    <button id="btnLogin" type="button" class="btn btn-primary" onclick="javascript: btnLogin_Click();">Login</button>
+                </div>
+                
+                <input type="submit" hidden/>
+            </form>
+            
+            
+            <div class="row w-100" style="margin-right: 0px;">
+                <div class="col-6">
+                    <a class="linkLogin" href="./about.html">What's this?</a>
+                </div>
+
+                <div class="col-6 text-right" style="margin-right: 0px; padding-right: 0px;">
+                    <a class="linkLogin" href="./register.html">Register?</a>
+                </div>
+            </div>
+        </div>
+
+        
+        <!-- Wait Dialog -->
+        <div id="dlgWait" class="dlgWait" style="display: none;">
+            <div class="row">
+                <div class="col-3">
+                    <img style="margin-left: 4px; margin-top: 6px;" src="./waiting.png" alt="" width="40" height="40"/>
+                </div>
+                
+                <div class="col-9">
+                    <p style="font-size: 20px; color: white; margin-top: 12px;">Please wait...</p>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <p id="lblDesc" style="font-size: 12px; color: white; margin-top: 10px; margin-left: 5px;"></p>
+                </div>
+            </div>
+        </div>     
+    </body>
+</html>

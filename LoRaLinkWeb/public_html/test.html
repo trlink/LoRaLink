@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>TODO supply a title</title>
+        <meta charset="UTF-8">
+        <link href="radar.css" rel="stylesheet" type="text/css"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+    </head>
+    <body>
+        <div id="divRadar">
+            <div class="close" style="float: right;">
+                <a onclick="javascript: document.getElementById('divRadar').style.display = 'None';">
+                    <img src="close.png"/>
+                </a>
+            </div>
+
+            <div class="radar" id="radar">
+                <div class="beam"></div>
+                <div class="course"></div>
+            </div>
+        </div>
+        <p>Own Course: <input type="text" id="txtOwnCourse"/></p>
+        <a onclick="javascript: radar.setCourse(document.getElementById('txtOwnCourse').value);">update</a>
+        
+        
+        <p>DeviceID: <input type="text" id="txtDevID"/></p>
+        <p>Course: <input type="text" id="txtDevCourse"/></p>
+        <p>Distance: <input type="text" id="txtDevDist"/></p>
+        
+        <a onclick="javascript: radar.addPoint(document.getElementById('txtDevID').value, document.getElementById('txtDevCourse').value, document.getElementById('txtDevDist').value, 0);">update</a>
+        
+        <script type="text/javascript">
+            
+             
+            
+
+            function CRadar(elRadar) {
+                //variables
+                ///////////
+                const getCSSVal = (e, v) => e.style.getPropertyValue(v);
+                const mod = (n, m) => ((n % m) + m) % m; // Fix negative Modulo
+                const PI = Math.PI;
+                const TAU = PI * 2;
+                var   m_fOwnCourse   = 0;
+                var   m_fMaxDistance = 10;
+                var   m_aPoints = [];
+                
+                
+                console.log("initRadar");
+
+
+                CRadar.prototype.getRadius = function () {
+                    return m_fMaxDistance;
+                };
+
+
+                /*
+                 *             
+                 */
+                CRadar.prototype.addPoint = function(pointID, fCourse, fDistance, nType) {
+                    //variables
+                    ///////////
+                    var oPoint = {};
+                    var strHTML = "";
+                    var fRadius = 0.0;
+                    var fCorrection = fCourse - 90.0;
+                    var _inst = this;
+                    
+                    
+                    oPoint.pointID = pointID;
+                    oPoint.fCourse = fCourse;
+                    oPoint.fDistance = fDistance;
+                    oPoint.nType = nType;
+                    oPoint.x = 0;
+                    oPoint.y = 0;
+                    
+                    //need to correct the course by 90 degree
+                    if(fCorrection < 0) {
+                        fCourse = 360 - fCorrection;
+                    }
+                    else {
+                        fCourse = fCorrection;
+                    };
+                    
+                    //remove old point
+                    if(pointID in m_aPoints) {
+                        document.getElementById("point_" + pointID).remove();
+                        
+                        delete m_aPoints[pointID];
+                    };
+                    
+                    
+                    //if the distance to the point is greater 
+                    //than the initial radius, increase the size
+                    if(fDistance > (m_fMaxDistance / 2)) {
+                        m_fMaxDistance = fDistance * 2; 
+                        
+                        //update all existing points
+                        m_aPoints.forEach(p => {
+                            _inst.addPoint(p.pointID, p.fCourse, p.fDistance, p.nType);
+                        });
+                    };
+                    
+                    //add point
+                    m_aPoints[pointID] = oPoint;
+                    
+                    
+                    //calculate the radius:
+                    //the coordinatesystem is 0, 0 for the top left corner 
+                    //and 1,1 for bottom right, so this must be corrected 
+                    //so m_fMaxDistance must be matched to 0 till .5
+                    fRadius = (0.5 / m_fMaxDistance) * fDistance;
+                    
+                    //calculate the position:
+                    let x = fRadius * Math.cos(fCourse * Math.PI / 180);
+                    let y = fRadius * Math.sin(fCourse * Math.PI / 180);
+
+                    oPoint.x = (x + fRadius * Math.cos(fCourse * Math.PI / 180)) + 0.5;
+                    oPoint.y = (y + fRadius * Math.sin(fCourse * Math.PI / 180)) + 0.5;
+                    
+                    strHTML = "<a id='point_" + oPoint.pointID + "' onclick='javascript: radarItemClicked('" + 
+                            oPoint.pointID + "');'><div class='" + (oPoint.nType === 0 ? "dotGreen" : "dotRed") + "' style='--x:" + oPoint.x + 
+                            "; --y:" + oPoint.y + "'></div><div id='info_point_" + oPoint.pointID + "' class='dotBoxGreen' style='position: absolute;'><span>" + 
+                            oPoint.pointID + "</span></div></a>"
+                    
+                    elRadar.innerHTML += strHTML;
+                };
+        
+        
+                CRadar.prototype.disableCourse = function(value) {
+                    //variables
+                    ///////////
+                    const elCourse = elRadar.querySelector(".course");
+                    
+                    elCourse.style.display = (value === true ? "None" : "");
+                };
+                
+                CRadar.prototype.setCourse = function(value) {
+                    m_fOwnCourse = value;
+                };
+              
+                const update = () => {
+                    //variables
+                    ///////////
+                    const elCourse = elRadar.querySelector(".course");
+                    const elBeam = elRadar.querySelector(".beam");
+                    const beamAngle    = parseFloat(getComputedStyle(elBeam).getPropertyValue("rotate")) * PI / 180 || 0;
+
+                    console.log("Update Radar");
+                    
+                    //update own course 
+                    elCourse.style.transform = "rotate(" + m_fOwnCourse + "deg)";
+
+                    elsDot = elRadar.querySelectorAll(".dotGreen, .dotRed");
+
+                    elsDot.forEach(elDot => {
+                        const x = getCSSVal(elDot, "--x") - 0.5;
+                        const y = getCSSVal(elDot, "--y") - 0.5;
+                        const dotAngle = mod(Math.atan2(y, x), TAU);
+                        const opacity = mod(dotAngle - beamAngle, TAU) / TAU;
+                        elDot.style.opacity = opacity;
+                        
+                        var rect = elDot.getBoundingClientRect();
+                        var infoDiv = document.getElementById("info_" + elDot.parentElement.id);
+                        
+                        infoDiv.style.top = (rect.top + 2) + 'px';
+                        infoDiv.style.left = (rect.left - 8) + 'px';
+                    });
+
+                    requestAnimationFrame(update);
+                };
+
+                update();
+            };
+
+            //document.querySelectorAll(".radar").forEach(initRadar);
+            var radar = new CRadar(document.getElementById("radar"));
+           
+    
+            function radarItemClicked(pointID) {
+                //alert("Item clicked: " + pointID);
+            };
+        </script>
+    </body>
+</html>

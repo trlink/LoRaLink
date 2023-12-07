@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LoRaLink-Web - Administration</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" type="text/css" href="/main.css">
+        <link rel="stylesheet" type="text/css" href="/administration.css">
+        <link rel="stylesheet" type="text/css" href="/bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="/bootstrap-select.min.css">
+        <link rel="stylesheet" type="text/css" href="/jquery.dataTables.min.css">
+    
+        <script src="/jquery-3.7.0.min.js"></script>
+        <script src="/bootstrap.bundle.min.js"></script>
+        <script src="/bootstrap-select.min.js"></script>
+        <script src="/jquery.dataTables.min.js"></script>
+        <script src="/dataTables.bootstrap4.min.js"></script>
+        <script src="/popper.js"></script>
+        <script src="/crypto-js_4.1.1_core.min.js"></script>
+        <script src="/crypto-js_4.1.1_md5.js"></script>
+        <script src="/jszip.min.js"></script>
+        <script src="/FileSaver.min.js"></script>
+        
+        
+        <script src="/administration.js"></script>
+    </head>
+    <body id="body">
+        
+        <input type="hidden" id="hfPwdHash" name="hfPwdHash" value="">
+        <input type="hidden" id="hfAdminUser" name="hfAdminUser" value="">
+        
+        <!-- Login panel -->
+        <div id="loginPanel">
+            <form name="frmLRLogin" target="#" method="get" onsubmit="javascript: btnLogin_Click(); return false;">
+                <div class="input-group mb-3">
+                    <input id="txtUsername" type="text" class="form-control" placeholder="Username" aria-label="">
+                </div>
+
+                <div class="input-group mb-3">
+                    <input id="txtPassword" type="password" class="form-control" placeholder="Password" aria-label="">
+                </div>
+
+                <div class="input-group mb-3 w-100">
+                    <button id="btnLogin" type="button" class="btn btn-primary" onClick="javascript: btnLogin_Click();">Login</button>
+                </div>
+                
+                <input type="submit" hidden/>
+            </form>
+        </div>
+        
+        <!-- Wait Dialog -->
+        <div id="dlgWait" class="dlgWait" style="display: none;">
+            <div class="row">
+                <div class="col-3">
+                    <img id="imgWaiting" style="margin-left: 4px; margin-top: 6px;" src="" alt="" width="40" height="40"/>
+                </div>
+                
+                <div class="col-9">
+                    <p style="font-size: 20px; color: white; margin-top: 12px;">Please wait...</p>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <p id="lblDesc" style="font-size: 12px; color: white; margin-top: 10px; margin-left: 5px;"></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Config tab -->
+        <div id="tabConfig" style="display: none;">
+
+            <div class="row">
+                <div class="col-2">
+                    <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+
+                        <button class="nav-link active" id="v-pills-admin-tab" data-toggle="pill" data-target="#v-pills-admin" type="button" role="tab" aria-controls="v-pills-admin" aria-selected="true">Admin-User</button>
+                        <button class="nav-link" id="v-pills-ap-tab" data-toggle="pill" data-target="#v-pills-ap" role="tab" type="button" aria-controls="v-pills-ap" aria-selected="false">Access Point</button>
+                        <button class="nav-link" id="v-pills-wifi-tab" data-toggle="pill" data-target="#v-pills-wifi" role="tab" type="button" aria-controls="v-pills-wifi" aria-selected="false">WiFi Access</button>
+                        <button class="nav-link" id="v-pills-link-tab" data-toggle="pill" data-target="#v-pills-link" role="tab" type="button" aria-controls="v-pills-link" aria-selected="false">LoRa-Link</button>        
+                        <button class="nav-link" id="v-pills-settings-tab" data-toggle="pill" data-target="#v-pills-settings" role="tab" type="button" aria-controls="v-pills-settings" aria-selected="false">Settings</button>
+                        <button class="nav-link" id="v-pills-user-tab" data-toggle="pill" data-target="#v-pills-user" role="tab" type="button" aria-controls="v-pills-user" aria-selected="false" onclick="javascript: getUserList();">User Management</button>
+                        <button class="nav-link" id="v-pills-lora-tab" data-toggle="pill" data-target="#v-pills-lora" role="tab" type="button" aria-controls="v-pills-lora" aria-selected="false">LoRa TRX Settings</button>
+                        <button class="nav-link" id="v-pills-nodes-tab" data-toggle="pill" data-target="#v-pills-nodes" role="tab" type="button" aria-controls="v-pills-nodes" aria-selected="false" onclick="javascript: getNodeList();">Heard Nodes</button>
+                        <button class="nav-link" id="v-pills-routes-tab" data-toggle="pill" data-target="#v-pills-routes" role="tab" type="button" aria-controls="v-pills-routes" aria-selected="false" onclick="javascript: getRouting();">Routing</button>
+                        <button class="nav-link" id="v-pills-files-tab" data-toggle="pill" data-target="#v-pills-files" role="tab" type="button" aria-controls="v-pills-files" aria-selected="false">Files</button>
+                        <button class="nav-link" id="v-pills-device-tab" data-toggle="pill" data-target="#v-pills-device" role="tab" type="button" aria-controls="v-pills-device" aria-selected="false">Device</button>
+                    </div>
+                </div>
+                
+                <div class="col-9">
+                    <div class="tab-content" id="v-pills-tabContent">
+                        <!-- Device tab -->
+                        <div class="tab-pane fade" id="v-pills-device" role="tabpanel" aria-labelledby="v-pills-device-tab">
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnResetDevice" type="button" class="btn btn-primary" onClick="javascript: btnReset_Click();">Reset Device</button>
+                            </div>
+                        </div>
+                        
+                        <!-- admin password panel -->
+                        <div class="tab-pane fade show active" id="v-pills-admin" role="tabpanel" aria-labelledby="v-pills-admin-tab">
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblAdminUser">Username:</label>
+                                <input type="text" maxlength="20" class="form-control" id="txtAdminUser" aria-describedby="lblAdminUser" placeholder="Admin">
+                                <small class="form-text text-muted">Username of the device administrator (not a User!)</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblAdminPassword">Password:</label>
+                                <input type="password" maxlength="49" class="form-control" id="txtAdminPassword" aria-describedby="lblAdminPassword" placeholder="">
+                                <small class="form-text text-muted">Password for the account</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblAdminPassword">Password (confirm):</label>
+                                <input type="password" maxlength="49" class="form-control" id="txtAdminPasswordConf" aria-describedby="lblAdminPasswordConf" placeholder="">
+                                <small class="form-text text-muted">Password for the account (confirmation)</small>
+                            </div>
+                            <br/>
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveAdminUser" type="button" class="btn btn-primary" onClick="javascript: btnSaveAdminUser_Click();">Save</button>
+                            </div>
+                        </div>
+
+                        <!-- WiFi Access Point config -->
+                        <div class="tab-pane fade" id="v-pills-ap" role="tabpanel" aria-labelledby="v-pills-ap-tab">
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblWiFiAP_SSID">AP SSID:</label>
+                                <input type="text" maxlength="30" class="form-control" id="txtWiFiAp_SSID" aria-describedby="lblWiFiAP_SSID" placeholder="LoRaLink">
+                                <small class="form-text text-muted">SSID (Name) of the WLan Network created by this device.</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblWiFiAP_Password">Password:</label>
+                                <input type="text" maxlength="30" class="form-control" id="txtWiFiAp_Password" aria-describedby="lblWiFiAP_Password" placeholder="">
+                                <small class="form-text text-muted">Password to access the WLan Network created by this device, leave empty if you want to create an open network.</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblWiFiAP_Channel">Channel:</label>
+                                <input type="number" class="form-control" id="txtWiFiAp_Channel" aria-describedby="lblWiFiAP_Channel" placeholder="1">
+                                <small class="form-text text-muted">Channel of the access point (1-13)</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblWiFiAP_IP">IP:</label>
+                                <input type="text" maxlength="19" class="form-control" id="txtWiFiAp_IP" aria-describedby="lblWiFiAP_IP" placeholder="192.168.5.1">
+                                <small class="form-text text-muted">Device IP</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="" id="chkWiFiAP_HideNetwork" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkWiFiAP_HideNetwork">
+                                  Hide network?
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">Hide Network (don't broadcast SSID)?</small>
+                            </div>
+                            <br/>
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveWiFiAP" type="button" class="btn btn-primary" onClick="javascript: btnSaveWiFiAP_Click();">Save</button>
+                            </div>
+                        </div>
+
+                        <!-- WiFi Network Config -->
+                        <div class="tab-pane fade" id="v-pills-wifi" role="tabpanel" aria-labelledby="v-pills-wifi-tab">
+                            <h3>WiFi Client configuration:</h3>
+                            <br/>                         
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label id="lblWiFiName" for="cmbWiFiNetwork">WiFi Network:</label> <br/>
+                                <select class="selectpicker form-control" id="cmbWiFiNetwork" title="WiFi Network" aria-describedby="lblWiFiName">
+                                </select>
+                                <br/>
+                                <small class="form-text text-muted">WiFi Network to connect to...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblWiFi_Password">Password:</label>
+                                <input type="text" class="form-control" id="txtWiFi_Password" aria-describedby="lblWiFi_Password" placeholder="">
+                                <small class="form-text text-muted">Password to access the WLan Network, leave empty if no password is required.</small>
+                            </div>
+                            <br/>
+                            
+                            <h3>Dynamic DNS configuration:</h3>
+                            <br/>                         
+                            <br/>
+                            
+                            <label id="lblSettingsDDNSType" for="cmbSettingsDDNSType">DDNS Provider:</label> <br/>
+                            <select class="selectpicker form-control" id="cmbSettingsDDNSType" title="Select Provider" aria-describedby="lblSettingsDDNSType">
+                                <option value="">Disabled</option>
+                                <option value="duckdns">duckdns</option>
+                                <option value="noip">No-IP</option>
+                                <option value="dyndns">dynDNS</option>
+                                <option value="dyndns">dynDNS</option>
+                                <option value="dynu">dynu</option>
+                                <option value="enom">enom</option>
+                                <option value="all-inkl">all-inkl</option>
+                                <option value="selfhost.de">selfhost.de</option>
+                                <option value="dyndns.it">dyndns.it</option>
+                                <option value="strato">strato</option>
+                                <option value="freemyip">freemyip</option>
+                                <option value="afraid.org">afraid.org</option>
+                            </select>
+                            <br/>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblDomainName">Domain:</label>
+                                <input type="text" maxlength="250" class="form-control" id="txtDomainName" aria-describedby="lblDomainName" placeholder="domain.provider.org">
+                                <small class="form-text text-muted">Name of the domain under which this device becomes reacheable...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="false" id="chkAuthenticateToken" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkAuthenticateToken">
+                                  Authenticate with token?
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">When this checkbox is checked, you only need to provide a token (id) as Username. 
+                                    Some DDNS provides only require a token for the DNS update.</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="txtDDNSUserName">Username / Token:</label>
+                                <input type="text" maxlength="250" class="form-control" id="txtDDNSUserName" aria-describedby="lblUserName" placeholder="user">
+                                <small class="form-text text-muted">Username or Token to be used...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="txtDDNSPassword">Password:</label>
+                                <input type="text" maxlength="250" class="form-control" id="txtDDNSPassword" aria-describedby="lblDDNSPassword" placeholder="">
+                            </div>
+                            
+                            <br/>
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveWiFi" type="button" class="btn btn-primary" onClick="javascript: btnSaveWiFi_Click();">Save</button>
+                            </div>
+                        </div>
+
+                        
+                        <!-- Link configuration -->
+                        <div class="tab-pane fade" id="v-pills-link" role="tabpanel" aria-labelledby="v-pills-link-tab">
+                            <h3>Server configuration</h3>
+                            <br/>                         
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="false" id="chkLink_ServerEnabled" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkLink_ServerEnabled">
+                                  Enable LoRa-Link TCP Server
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">When this device is connected to the internet (and routing is configured), 
+                                    this device can act as a LoRa-Link Server. You can connect LoRa-Link-cells together... 
+                                    Please check the manual for more info...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblLink_ServerPort">Server Port:</label>
+                                <input type="number" class="form-control" id="txtLink_ServerPort" aria-describedby="lblLink_ServerPort" placeholder="9247">
+                                <small class="form-text text-muted">Port to listen on (for remote LoRa-Link connections).</small>
+                            </div>
+                            <br/>
+                            <br/>
+                            <hr/>
+                            <h3>Client configuration</h3>
+                            <br/>                         
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="false" id="chkLink_ClientEnabled" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkLink_ClientEnabled">
+                                  Connect to remote LoRa-Link TCP Server
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">When this device is connected to the internet, 
+                                    this device can connect to a remote a LoRa-Link Server. You can connect LoRa-Link-cells together... 
+                                    Please check the manual for more info...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblLink_ClientPort">Port:</label>
+                                <input type="number" class="form-control" id="txtLink_ClientPort" aria-describedby="lblLink_ClientPort" placeholder="9247">
+                                <small class="form-text text-muted">Port to connect to...</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblLink_ClientName">Name/IP:</label>
+                                <input type="text" class="form-control" id="txtLink_ClientName" aria-describedby="lblLink_ClientName" placeholder="server.network.org">
+                                <small class="form-text text-muted">Name or IP of the remote server...</small>
+                            </div>
+                            <br/>
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveLink" type="button" class="btn btn-primary" onClick="javascript: btnSaveLink_Click();">Save</button>
+                            </div>
+                        </div>
+                        
+                        <!-- General Device Settings -->
+                        <div class="tab-pane fade" id="v-pills-settings" role="tabpanel" aria-labelledby="v-pills-settings-tab">
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label id="lblSettingsDeviceType" for="cmbSettingsDeviceType">Device Type:</label> <br/>
+                                <select class="selectpicker form-control" id="cmbSettingsDeviceType" title="Device Type" aria-describedby="lblSettingsDeviceType">
+                                    <option value="1">Personal</option>
+                                    <option value="2">Personal - Repeater</option>
+                                    <option value="3">Repeater - Public Access</option>
+                                    <option value="4">Repeater - No Public Access</option>
+                                </select>
+                                <br/>
+                                <small class="form-text text-muted">
+                                    Type of the device:<br/>
+                                    <br/>
+                                    <table>
+                                        <tr>
+                                            <td>Personal</td>
+                                            <td>
+                                                This device is a personal device, it has no fixed location and it does not accept new user registrations, or stores messages for other users...<br/>
+                                                Before switching to personal, you should choose "Rersonal - Repater" and create your account on this device.
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td>Personal - Repeater</td>
+                                            <td>This device is a personal device, it has no fixed location but it accept user registrations and stores messages for other users...<br/>
+                                                You can use this device in the family, where you share it among all users...
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td>Repeater - Public Access</td>
+                                            <td>This device is a public device, it has a fixed location and it accept user registrations and stores messages for users...</td>
+                                        </tr>
+                                        
+                                        <tr>
+                                            <td>Repeater - No Public Access</td>
+                                            <td>
+                                                This device is only a repeater, it has a fixed location and only forwards the Network data...<br/>
+                                                WLan Access will be turned off after 5 minutes after start.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceID">Device Node ID:</label>
+                                <input type="number" class="form-control" id="txtSettingsDeviceID" aria-describedby="lblSettingsDeviceID" placeholder="1234567">
+                                <small class="form-text text-muted">Unique ID in the mesh network. The number can be anything greater 1000. The ID is a 32bit value.</small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceName">Device Owner:</label>
+                                <input type="text" class="form-control" maxlength="200" id="txtSettingsDeviceOwner" aria-describedby="lblSettingsDeviceOwner" placeholder="Owner">
+                                <small class="form-text text-muted">
+                                    Owner of the device, provides information who operates the device, should be set to something where user can reach you...<br/>
+                                    Max 200 chars!
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceName">Device Name:</label>
+                                <input type="text" class="form-control" maxlength="24" id="txtSettingsDeviceName" aria-describedby="lblSettingsDeviceName" placeholder="Name">
+                                <small class="form-text text-muted">
+                                    Name of the device. Inside the network, the user registers at a specific device and will be referred as user@device...<br/>
+                                    So if you name the device "BatCave", user "Batman" is referred as Batman@BatCave, so choose wisely... <br/>
+                                    The Network also allows to have multiple "BatCaves", they are internally referred by their Device ID, but from the Frontend-Side, it is not funny to check your account on all available "BatCaves"...
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceShoutOut">Max. Shout-Out Entries:</label>
+                                <input type="text" class="form-control" maxlength="4" id="txtSettingsDeviceShoutOut" aria-describedby="lblSettingsDeviceShoutOut" placeholder="100">
+                                <small class="form-text text-muted">
+                                    Number of enties in the shout out table...<br/>
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="" id="chkSettingsTimeUPD" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkSettingsTimeUPD">
+                                  NTP Time Update?
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">Update Time from remote time server (only when connected to WiFi)?</small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceBlocked">Blocked Device IDs:</label>
+                                <input type="text" class="form-control" maxlength="49" id="txtSettingsDeviceBlocked" aria-describedby="lblSettingsDeviceBlocked" placeholder="12345; 23456;">
+                                <small class="form-text text-muted">
+                                    Device ID's which are treated as if they where not received, used for testing and debugging purposes...<br/>
+                                    If you want to block a device, use the device table, where you can block a device...<br/>
+                                    For User-Level blocking, the user is responsible!
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceLat">Device Position (Latitude):</label>
+                                <input type="number" class="form-control" maxlength="8" id="txtSettingsDeviceLat" aria-describedby="lblSettingsDeviceLat" placeholder="51.1234">
+                                <small class="form-text text-muted">
+                                    Devices Latitude, if you wan't to provide a fixed position, where the dev is located.<br/> 
+                                    Use it, if you operate a public repeater, so that users can find a node if the need one...<br/>
+                                    Set to 0.0 if you don't want to provide a location and the other users can see it...<br/>
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSettingsDeviceLon">Device Position (Longitude):</label>
+                                <input type="number" class="form-control" maxlength="8" id="txtSettingsDeviceLon" aria-describedby="lblSettingsDeviceLon" placeholder="8.1234">
+                                <small class="form-text text-muted">
+                                    Devices Longitude, if you wan't to provide a fixed position, where the dev is located.<br/> 
+                                    Use it, if you operate a public repeater, so that users can find a node if the need one...<br/>
+                                    Set to 0.0 if you don't want to provide a location and the other users can see it...<br/>
+                                </small>
+                            </div>
+                            <br/>
+                            
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveDevice" type="button" class="btn btn-primary" onClick="javascript: btnSaveDevice_Click();">Save</button>
+                            </div>
+                            
+                        </div>
+                            
+                        <!-- User Management -->
+                        <div class="tab-pane fade" id="v-pills-user" role="tabpanel" aria-labelledby="v-pills-user-tab">
+                            
+                            <input type="hidden" id="hfUserManagementUser" name="hfUserManagementUser" value="">
+                            
+                            <table id="dtUserList" class="display nowrap" style="width:100%">
+                            </table>
+                            
+                            
+                            <div class="modal fade" id="dlgUserManagementChangeUser" tabindex="-1" role="dialog" aria-labelledby="ConfigPasswordModalCenterTitle" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered" role="document">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="dlgUserManagementChangeUserLongTitle"></h5>
+                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                <span aria-hidden="true">&times;</span>
+                                            </button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                                <div class="row">
+                                                    <div class="col-4">
+                                                        <button id="btnUserManagementBlock" type="button" class="btn btn-light" onClick="javascript: btnUserManagementBlock_click(1);">Block User</button>
+                                                        <button id="btnUserManagementUnblock" type="button" class="btn btn-light" onClick="javascript: btnUserManagementBlock_click(0);">Unblock User</button>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <button id="btnUserManagementDelete" type="button" class="btn btn-danger" onClick="javascript: btnUserManagementDelete_click();">Delete User</button>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <button id="btnUserManagementReset" type="button" class="btn btn-primary" onClick="javascript: btnUserManagementReset_click();">Reset Password</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                            <button type="button" class="btn btn-primary" onclick="" data-dismiss="modal">OK</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- LoRa Settings -->
+                        <div class="tab-pane fade" id="v-pills-lora" role="tabpanel" aria-labelledby="v-pills-lora-tab">
+                            <h3>LoRa Transmitter Configuration</h3>
+                            <br/>                         
+                            <br/>
+                            <div id="divDisableLoRaModem" class="form-group" style="margin-left: 32px; margin-right:2px; position: relative;">
+                                <input class="form-check-input" type="checkbox" value="" id="chkDisableLoraModem">
+                                <label class="form-check-label" for="chkDisableLoraModem">
+                                  Disable LoRa Modem
+                                </label>
+                                <small class="form-text text-muted">Should the LoRa Modem be disabled (use for IP only stations)?</small>
+                            </div>
+
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblFrequency">Frequency:</label>
+                                <input type="text" class="form-control" id="txtFrequency" aria-describedby="lblFrequency" placeholder="438000000" maxlength="9">
+                                <small id="txtFrequencyHelp" class="form-text text-muted">Frequency to use in Hz</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblTransmitPwr">LoRa Transmit Power:</label> <br/>
+                                <select class="selectpicker show-tick" id="cmbTransmitPwr" title="LoRa Transmit Power" aria-describedby="lblTransmitPwr">
+                                    <option value="1">1 dBm</option>
+                                    <option value="2">2 dBm</option>
+                                    <option value="3">3 dBm</option>
+                                    <option value="4">4 dBm</option>
+                                    <option value="5">5 dBm</option>
+                                    <option value="6">6 dBm</option>
+                                    <option value="7">7 dBm</option>
+                                    <option value="8">8 dBm</option>
+                                    <option value="9">9 dBm</option>
+                                    <option value="10">10 dBm</option>
+                                    <option value="11">11 dBm</option>
+                                    <option value="12">12 dBm</option>
+                                    <option value="13">13 dBm</option>
+                                    <option value="14">14 dBm</option>
+                                    <option value="15">15 dBm</option>
+                                    <option value="16">16 dBm</option>
+                                    <option value="17">17 dBm</option>
+                                    <option value="18">18 dBm</option>
+                                    <option value="19">19 dBm</option>
+                                    <option value="20">20 dBm</option>
+                                </select>
+                                <small id="txtTransmitPwrHelp" class="form-text text-muted">LoRa Transmitter Power in dBm</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblBandwith">LoRa Bandwith:</label> <br/>
+                                <select class="selectpicker show-tick" id="cmbBandwith" title="LoRa Bandwith" aria-describedby="lblBandwith">
+                                    <option value="500">500.0 kHz</option>
+                                    <option value="250">250.0 kHz</option>
+                                    <option value="125">125.0 kHz</option>
+                                    <option value="62">62.50 kHz</option>
+                                    <option value="41">41.70 kHz</option>
+                                    <option value="31">31.25 kHz</option>
+                                    <option value="20">20.80 kHz</option>
+                                    <option value="15">15.60 kHz</option>
+                                    <option value="10">10.40 kHz</option>
+                                    <option value="7">7.800 kHz</option>
+                                </select>
+                                <small id="txtBandwithHelp" class="form-text text-muted">LoRa Transmitter Bandwith</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSpreadingFactor">LoRa Spreading Factor:</label> <br/>
+                                <select class="selectpicker show-tick" id="cmbSpreadingFactor" title="LoRa Spreading Factor" aria-describedby="lblSpreadingFactor">
+                                    <option value="12">12</option>
+                                    <option value="11">11</option>
+                                    <option value="10">10</option>
+                                    <option value="9">9</option>
+                                    <option value="8">8</option>
+                                    <option value="7">7</option>
+                                    <option value="6">6</option>
+                                </select>
+                                <small id="txtSpreadingFactorHelp" class="form-text text-muted">LoRa Spreading Factor</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblCodingRate">LoRa Coding Rate:</label> <br/>
+                                <select class="selectpicker show-tick" id="cmbCodingRate" title="LoRa Coding Rate" aria-describedby="lblCodingRate">
+                                    <option value="1">5</option>
+                                    <option value="2">6</option>
+                                    <option value="3">7</option>
+                                    <option value="4">8</option>
+                                </select>
+                                <small id="txtCodingRateHelp" class="form-text text-muted">LoRa Coding Rate</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblPreamble">Preamble length:</label>
+                                <input type="number" class="form-control" id="txtPreamble" aria-describedby="lblPreamble" placeholder="20">
+                                <small id="txtPreambleHelp" class="form-text text-muted">Preamble length</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblSyncWord">Sync Word:</label>
+                                <input type="number" class="form-control" id="txtSyncWord" aria-describedby="lblSyncWord" placeholder="99">
+                                <small id="txtSyncWordHelp" class="form-text text-muted">Sync Word</small>
+                            </div>
+
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblIntMsgInt">Inter Message Interval:</label>
+                                <input type="number" class="form-control" id="txtIntMsgInt" aria-describedby="lblIntMsgInt" placeholder="500">
+                                <small id="txtIntMsgIntHelp" class="form-text text-muted">Interval in ms, we wait before the device try to send the next message. 
+                                    This parameter affects only how often the internal data queue will be checked and how often the modem will be asked if it is free
+                                </small>
+                            </div>
+                            
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblModemTxDelay">TX Delay:</label>
+                                <input type="number" class="form-control" id="txtModemTxDelay" aria-describedby="lblModemTxDelay" placeholder="1500">
+                                <small id="txtModemTxDelayHelp" class="form-text text-muted">Interval in ms, we wait after sending the data to the modem buffer. 
+                                    Depending on the settings, it can take some time till the modem has send the data in the internal buffer and the other 
+                                    side has received and decoded the data. This parameter avoids sending too much packets at the same time...
+                                </small>
+                            </div>
+                            
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblModemRxDelay">RX Delay:</label>
+                                <input type="number" class="form-control" id="txtModemRxDelay" aria-describedby="lblModemRxDelay" placeholder="500">
+                                <small id="txtModemRxDelayHelp" class="form-text text-muted">Time in ms (dynamic), we wait before transmission. 
+                                    A time between (value / 2) to value will be randomly choosen, the modem listens for activity before transmit.
+                                    This will reduce "doubling" (transmit at the same time) and reduces the duty cycle...
+                                </small>
+                            </div>
+                            
+                            
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                <label for="lblModemReceiveTimeout">Modem Receive Timeout:</label>
+                                <input type="number" class="form-control" id="txtModemReceiveTimeout" aria-describedby="lblModemReceiveTimeout" placeholder="1500">
+                                <small id="txtModemReceiveTimeoutHelp" class="form-text text-muted">Time in seconds the modem waits for a complete packet, the time 
+                                    should be long engough to receive a complete packet ( + some extra time). Depends on the settings above, a packet can take a long 
+                                    time. The used library would not return a packet, when the time is to small.</small>
+                            </div>
+
+                            <div class="input-group mb-3 w-100">
+                                <button id="btnSaveModem" type="button" class="btn btn-primary" onClick="javascript: btnSaveModem_Click();">Save</button>
+                            </div>
+                        </div>
+                        
+                        
+                        
+                        <!-- Node Management -->
+                        <div class="tab-pane fade" id="v-pills-nodes" role="tabpanel" aria-labelledby="v-pills-nodes-tab">
+                            
+                            <table id="dtNodeList" class="display nowrap" style="width:100%">
+                            </table>
+                        </div>
+                        
+                        
+                        <!-- Routes -->
+                        <div class="tab-pane fade" id="v-pills-routes" role="tabpanel" aria-labelledby="v-pills-routes-tab">
+                            
+                            <table id="dtRouteList" class="display nowrap" style="width:100%">
+                            </table>
+                        </div>
+                        
+                        <!-- file Management -->
+                        <div class="tab-pane fade" id="v-pills-files" role="tabpanel" aria-labelledby="v-pills-files-tab">
+                            <h3>File / Data management</h3>
+                            <hr/>
+                            <table>
+                                <tr>
+                                    <td>
+                                        <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                            <label for="lblFilesystem">Filesystem: </label> 
+                                            <select class="selectpicker show-tick" id="cmbFileSystem" title="Filesystem" aria-describedby="lblFilesystem">
+                                            </select>
+                                        </div>
+                                    </td>
+                                    
+                                    <td>
+                                        <div style="margin-left: 30px; margin-bottom: 12px;">
+                                            <input class="form-check-input" type="checkbox" value="" id="chkFileManagementConfigOnly" onchange="javascript: onChkFileManagementConfigOnly_Change();">
+                                            <label class="form-check-label" for="chkFileManagementConfigOnly">
+                                              Show config/data files only
+                                            </label>
+                                        </div>
+                                    </td>
+                                    
+                                    <td>
+                                        <button id="btnSaveConfigFiles" type="button" class="btn btn-primary" onClick="javascript: btnSaveConfigFiles_Click();" style="display: none;">Download all</button>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td colspan="3">
+                                        <form class="form-inline" id="frmFilesCreateFolder" style="display: none;">
+                                            <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                                                <label for="lblFilesCreateFolder">New folder name: </label>
+                                                <input type="text" class="form-control" maxlength="30" id="txtFilesNewFolder" aria-describedby="lblFilesCreateFolder" placeholder="">
+                                                <button id="btnFilesNewFolder" type="button" class="btn btn-primary" onClick="javascript: btnFilesNewFolder_Click();">create</button>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <br/>
+                            <p>Free Storage: <span id="lblFreespace"></span> | Used Storage: <span id="lblUsedspace"></span> | Total Storage: <span id="lblTotalspace"></span></p><br/>
+                            
+                            <table id="dtFilesList" class="display nowrap" style="width:100%">
+                            </table>
+                            
+                            <br/>
+                            <h3>File Uploader:</h3>
+                            <br/>                            
+                            <form id="frmFileUpload" enctype="multipart/form-data" method="post">
+                                <input type="file" name="file" id="file" onchange="uploadFile(event);" disabled><br>
+                                <br/>
+                                <p id="lblUploadStatus"></p>
+                            </form>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>     
+    </body>
+</html>

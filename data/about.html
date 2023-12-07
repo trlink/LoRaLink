@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>LoRa-Link About</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+        <h1>What's this?</h1>
+        <p>
+            <br/>
+            <br/>
+            You just connected to an open WiFi-Network and found this?<br/>
+            <br/>
+            You found a small device based on a microcontroller, which provides communication over radio frequencies. 
+            It uses a long range modem, called "LoRa". This modem is capable to transfer small amounts of data over a long distance.
+            The device itself needs only a small amount of energy and is maybe solar and or battery powered. Since the resources on these microcontrollers
+            are limited, it can only serve a small amount of clients at the same time - but you can always build your own node for a few bucks, 
+            you only need an ESP32 with a 433MHz LoRa Modem and a SD card. They ESPs are already assembled, so the only difficulty is, to get the firmware 
+            on the device and hook up the SD card...
+            <br/>
+            <br/>
+            The device supports two types of messages: 
+            <br/>
+            <br/>
+            ShoutOut and Chat: 
+            <br/>
+            <br/>
+            A shoutOut is a very short Message(up to 150 chars, depending on encoding), 
+            which is "fast" (when it travels across the network, it can and will take some time). A ShoutOut can be read by everyone, who is connected to 
+            a Node. This device itself can store a configured amount of messages, if there are too many shoutout messages, the oldest gets deleted... A ShoutOut cannot be encrypted.
+            <br/>
+            <br/>
+            A chat message is a personal message to a secific user on a specific device, like an email. A chat can be up to 1500 characters long (depends on 
+            encoding and if encryption is used). You can send a chat message by use the "New Chat"-Menu and type a username like &lt;user&gt;@&lt;node&gt; to send a message.
+            <br/>
+            <br/>
+            After you send the first message, you can enable end-to-end encryption for the following messages. The encryption happens on the client and is a simple
+            XOR encryption. Without the knwolege of the messages content it's very hard to figure it out. The message is also encryped on the device, but be careful 
+            when sending private data, you can never be safe!
+            <br/>
+            <br/>
+            What's stored on the device?
+            <br/>
+            <br/>
+            During the registration, you have to select a user name and a password and if you want, you can provide an email address to contact you, if the owner of the device decides to, 
+            only the owner/admin can see the address. The device can't send any messages via email... Your password is stored as checksum, if you forgot it, you can ask the admin to reset it, 
+            if he provided contact data in the owner section, if not, don't forget your password...
+            <br/>
+            <br/>
+        </p>
+        <h1>How to get involved?</h1>
+        <br/>
+        <br/>
+        <p>
+            You want to try it out? Just register an account at this device, if it has some free slots...  
+            <br/>
+            <br/>
+            If you are familar with electronics, go to the <a href="./build/build.html">build section</a> and download everything needed and create your own node...
+            <br/>
+            <br/>
+        </p>
+        <h1>Want to support the development?</h1>
+        <br/>
+        <br/>
+        <p>
+            If you want to support the development (or me) you can by me a coffe on <a href="https://www.buymeacoffee.com/cwallukat">By me a coffee</a>
+            <br/>
+            <br/>
+        </p>
+        
+        
+    </body>
+</html>
