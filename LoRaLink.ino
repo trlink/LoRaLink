@@ -31,7 +31,8 @@
 #define WEBAPIDEBUGX
 #define TCPAPIDEBUG
 #define TCPAPIERROR
-
+//#define SERIAL1DEBUG
+//#define GPSSTATSDEBUG
 
 //struct to store recieved data and handle it in another thread
 struct _sModemData
@@ -3348,7 +3349,20 @@ void loop()
   //variables
   ///////////
   long            lCheckTimer = 0;
-  
+
+  #if LORALINK_HARDWARE_GPS == 1
+      //variables
+      ///////////
+      int  year;
+      byte month, day, hour, minute, second, hundredths;
+      unsigned long age;
+      long lDiff;
+      unsigned short  sentences = 0, failed = 0, sentences2 = 0, failed2 = 0;
+      unsigned long   chars = 0, chars2 = 0;
+      float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
+      int nSat, nHDOP;
+      DateTime dtClock;
+  #endif
   
   esp_task_wdt_init(180, false);
   
@@ -3392,21 +3406,18 @@ void loop()
     };
   
     #if LORALINK_HARDWARE_GPS == 1
-      //variables
-      ///////////
-      int  year;
-      byte month, day, hour, minute, second, hundredths;
-      unsigned long age;
-      unsigned short  sentences = 0, failed = 0, sentences2 = 0, failed2 = 0;
-      unsigned long   chars = 0, chars2 = 0;
-      float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
-      int nSat, nHDOP;
       
       if(g_pGPS != NULL)
       {
         if(Serial1.available() > 0)
         {
-          g_pGPS->encode(Serial1.read());
+          char c = Serial1.read();
+          
+          #ifdef SERIAL1DEBUG
+            Serial.print(c);
+          #endif
+          
+          g_pGPS->encode(c);
           
           ResetWatchDog();
 
@@ -3414,6 +3425,15 @@ void loop()
 
           if((sentences2 > sentences) || (failed2 > failed))
           {
+            #ifdef GPSSTATSDEBUG
+              Serial.print(F("[GPS] Chars decoded: "));
+              Serial.print(chars2);
+              Serial.print(F(" sentences: "));
+              Serial.print(sentences2);
+              Serial.print(F(" Failed: "));
+              Serial.println(failed2);           
+            #endif
+
             sentences = sentences2;
             failed    = failed2;
             
@@ -3426,6 +3446,9 @@ void loop()
               LLSystemState.bValidSignal = true;
               
               sprintf_P(LLSystemState.szGpsTime, PSTR("%02d:%02d:%02d"), hour, minute, second);
+              
+              
+              dtClock  = DateTime(year, month, day, hour, minute, second);
 
               fAlt     = g_pGPS->f_altitude();
               nSat     = g_pGPS->satellites();
@@ -3435,7 +3458,7 @@ void loop()
 
               g_pGPS->f_get_position(&fLat, &fLon, &age);
               
-              if(nSat == TinyGPS::GPS_INVALID_SATELLITES)
+              if((nSat == TinyGPS::GPS_INVALID_SATELLITES) || (nSat < 3))
               {
                 LLSystemState.bValidSignal = false;
               };
@@ -3467,9 +3490,22 @@ void loop()
               LLSystemState.fSpeed      = fSpeed;
               LLSystemState.nHDOP       = nHDOP;
               LLSystemState.fCourse     = fCourse;
+
+              lDiff = dtClock.unixtime() - ClockPtr->getUnixTimestamp();
+
+              if(lDiff < 0) 
+              {
+                lDiff *= -1;
+              };
+
+              #ifdef GPSSTATSDEBUG
+                Serial.print(F("[GPS] difference to loc clock: "));
+                Serial.println(lDiff);
+              #endif
               
               //update clock if not already done, or time is from a remote or unknown source
-              if((ClockPtr->timeSet() == false) || (ClockPtr->getUpdateSource() == UPDATE_SOURCE_NETWORK) || (ClockPtr->getUpdateSource() == UPDATE_SOURCE_NONE))
+              //of if the difference to GPS is > 10min
+              if(((lDiff / 60) > 10) || (ClockPtr->timeSet() == false) || ((ClockPtr->getUpdateSource() != UPDATE_SOURCE_NTP) && (ClockPtr->getUpdateSource() != UPDATE_SOURCE_EXTERNAL)))
               {
                 ClockPtr->SetDateTime(year, month, day, hour, minute, UPDATE_SOURCE_EXTERNAL);
     

@@ -73,9 +73,6 @@ CLoRaModem::CLoRaModem(tOnReceivedModemData onRxD, tOnModemStateChanged onState)
   //i had to put it into a seperate thread to avoid 
   //packet loss...
   this->setTaskID(0);
-
-  //reset the device
-  this->m_pLoRaModem->resetDevice();
 };
 
 
@@ -125,8 +122,7 @@ bool CLoRaModem::Init(uint32_t lFreq, int nPower, uint32_t lBandwith, int nSprea
   //https://github.com/StuartsProjects/SX12XX-LoRa
   //http://community.heltec.cn/t/heltec-lora-32-v3-nightmares/12133/3
   SPI.begin(LORALINK_MODEM_SCK, LORALINK_MODEM_MISO, LORALINK_MODEM_MOSI, LORALINK_MODEM_SS);
-  //SPI.begin();
-
+  
   if(this->m_pLoRaModem->begin(LORALINK_MODEM_SS, LORALINK_MODEM_RST, LORALINK_MODEM_BUSY, LORALINK_MODEM_DI0, -1, LORALINK_MODEM_TYPE) == false) 
   {
     #ifdef L1_INFO
@@ -140,9 +136,11 @@ bool CLoRaModem::Init(uint32_t lFreq, int nPower, uint32_t lBandwith, int nSprea
     return false;
   };
 
-  this->m_pLoRaModem->setMode(MODE_STDBY_RC);
-  this->m_pLoRaModem->setupLoRa(lFreq, 0, InterfaceToSF(nSpreadingFactor), InterfaceToBandwidth(lBandwith), InterfaceToCR(nCodingRate), LDRO_AUTO);
+  //reset the device
+  this->m_pLoRaModem->resetDevice();
 
+  this->m_pLoRaModem->setMode(MODE_STDBY_RC);
+  
   #ifdef LORALINK_MODEM_SX126x
     this->m_pLoRaModem->setRegulatorMode(USE_DCDC);
     this->m_pLoRaModem->setPaConfig(0x04, PAAUTO, LORALINK_MODEM_TYPE);
@@ -161,6 +159,9 @@ bool CLoRaModem::Init(uint32_t lFreq, int nPower, uint32_t lBandwith, int nSprea
   this->m_pLoRaModem->setHighSensitivity();  //set for maximum gain
   this->m_pLoRaModem->setSyncWord(nSyncWord);
   this->m_nTxPower = nPower;
+
+  this->m_pLoRaModem->setupLoRa(lFreq, 0, InterfaceToSF(nSpreadingFactor), InterfaceToBandwidth(lBandwith), InterfaceToCR(nCodingRate), LDRO_AUTO);
+
 
   Serial.print(F("[Modem] Read Freq: "));
   Serial.println(this->m_pLoRaModem->getFreqInt());
