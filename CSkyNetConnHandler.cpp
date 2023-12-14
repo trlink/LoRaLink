@@ -65,7 +65,7 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
   {
     //reset timer, when something received
     this->m_lSilenceTimer   = millis() + SKYNET_CONN_TIMEOUT_SILENCE;
-    this->m_lKeepAliveTimer = millis() + SKYNET_CONN_TIMEOUT_KEEPALIVE;
+
 
     //check if the dev is "blocked"
     //this is for debugging purposes
@@ -238,6 +238,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
       
                         nAnswerLen = QUERY_RESP(pAnswer, msg.dwMsgID, DeviceConfig.dwDeviceID, msg.nSenderID, msg.nOriginID, 0, (char*)&szDevName, DeviceConfig.dwDeviceID, dwScheduleID, nDevType);
                         ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+
+                        bFound = true;
                       };
                     }
                     else
@@ -250,8 +252,17 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                       //he is query my dev
                       nAnswerLen = QUERY_RESP(pAnswer, msg.dwMsgID, DeviceConfig.dwDeviceID, msg.nSenderID, msg.nOriginID, 0, (char*)&DeviceConfig.szDevName, DeviceConfig.dwDeviceID, dwScheduleID, DeviceConfig.nDeviceType);
                       ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+
+                      bFound = true;
                     };
                   };
+                };
+
+
+                //if it was not possible to resolve by name or ID forward the request
+                if(bFound == false)
+                {
+                  
                 };
               }
               else
@@ -1132,8 +1143,8 @@ void CSkyNetConnectionHandler::handleTask()
 
           //reset timers after HELLO
           this->m_nState          = SKYNET_CONN_STATE_CONNECTING;
-          this->m_lSilenceTimer   = SKYNET_CONN_TIMEOUT_SILENCE; 
-          this->m_lKeepAliveTimer = SKYNET_CONN_TIMEOUT_KEEPALIVE;
+          this->m_lSilenceTimer   = millis() + SKYNET_CONN_TIMEOUT_SILENCE; 
+          this->m_lKeepAliveTimer = millis() + SKYNET_CONN_TIMEOUT_KEEPALIVE;
         };
 
         this->m_lStateTimer = millis() + SKYNET_CONN_TIMEOUT_CONNECT;
@@ -1321,20 +1332,29 @@ bool CSkyNetConnectionHandler::forwardMessage(void *pMessage, bool bConfirm)
         Serial.print(F(" hop count "));
         Serial.println(route->dwHopCount);
       #endif
-            
-      pMsg->nHopCount  += 1;
-      pMsg->nSenderID   = DeviceConfig.dwDeviceID;
-      pMsg->nViaID      = route->dwViaNode;
-      pMsg->dwMsgID     = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
-      
-      
-      nLen = encodeSkyNetProtocolMessage(pMsg, pData);
-      ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(route->dwViaNode, pMsg->dwMsgID, route->pConnHandler->getTaskID(), route->pConnHandler->getConnectionType(), pData, nLen, bConfirm);
 
-      delete pMsg;
-      delete pData;
+      if(route->dwViaNode != pMsg->nSenderID)
+      {
+        pMsg->nHopCount  += 1;
+        pMsg->nSenderID   = DeviceConfig.dwDeviceID;
+        pMsg->nViaID      = route->dwViaNode;
+        pMsg->dwMsgID     = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
+        
+        
+        nLen = encodeSkyNetProtocolMessage(pMsg, pData);
+        ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(route->dwViaNode, pMsg->dwMsgID, route->pConnHandler->getTaskID(), route->pConnHandler->getConnectionType(), pData, nLen, bConfirm);
 
-      return true;
+        delete pMsg;
+        delete pData;
+  
+        return true;
+      }
+      else 
+      {
+        #if SKYNET_CONN_INFO == 1
+          Serial.println(F("[CHandler] Route error: new Via == Sender - failed to route packet"));
+        #endif
+      };
     };
 
     #if SKYNET_CONN_INFO == 1

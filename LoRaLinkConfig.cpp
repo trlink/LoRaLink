@@ -1,7 +1,7 @@
 //includes
 //////////
 #include "LoRaLinkConfig.h"
-#include "CFileUtils.h"
+#include "HardwareConfig.h"
 
 
 #define MAX_CFG_SIZE 2000
@@ -48,7 +48,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_ADMIN, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_ADMIN, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -86,7 +86,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -110,6 +110,8 @@ void ReadDeviceConfig()
 
     Serial.print(F("LoRa Link IP: "));
     Serial.println(LoRaWiFiApCfg.szDevIP);
+
+    LoRaWiFiApCfg.bWiFiEnabled = false;
   }
   else
   {
@@ -122,12 +124,13 @@ void ReadDeviceConfig()
     LoRaWiFiApCfg.bUseDHCP = false;
     LoRaWiFiApCfg.bHideNetwork = false;
     LoRaWiFiApCfg.nChannel = 1;
+    LoRaWiFiApCfg.bWiFiEnabled = false;
 
     PrepareSerializeWiFiConfig(doc, &LoRaWiFiApCfg);
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_AP, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_AP, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -161,7 +164,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_CLNT, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_CLNT, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -196,7 +199,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_IPLINK, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_IPLINK, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -235,7 +238,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_MODEM, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_MODEM, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };
@@ -265,7 +268,7 @@ void ReadDeviceConfig()
 
     nLength = serializeJson(doc, szOutput, MAX_CFG_SIZE);
 
-    if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DDNS, (byte*)szOutput, nLength) == true)
+    if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DDNS, (byte*)szOutput, nLength) == true)
     {
       Serial.println(F("Config written..."));
     };

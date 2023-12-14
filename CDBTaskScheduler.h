@@ -13,8 +13,8 @@
 
 //defines
 /////////
-#define SCHEDULER_DEBUG
-#define TASK_SCHEDULER_TIME       (60 * 1000)
+//#define SCHEDULER_DEBUG
+#define TASK_SCHEDULER_TIME       (5 * 1000)
 
 
 
@@ -27,6 +27,7 @@ typedef void(*tOnTaskScheduleRemove)(uint32_t dwScheduleID, int nScheduleType, u
 
 //compare function
 typedef bool(*tHasSchedule)(byte *pScheduleData, int nScheduleType, void *pScheduleStruct);
+
 
 
 class CDBTaskScheduler : public CTaskIF
@@ -91,6 +92,7 @@ class CDBTaskScheduler : public CTaskIF
     tOnTaskScheduleRemove m_pScheduleRemoveCallback;
     bool                  m_bSchedulerHalted;
     int                   m_nLastSource;
+    long                  m_lNextTaskCheck;
 };
 
 

@@ -11,6 +11,7 @@ CDBTaskScheduler::CDBTaskScheduler(tOnTaskSchedule pScheduleCallback, tOnTaskSch
   this->m_pScheduleRemoveCallback = pScheduleRemoveCallback;
   this->m_bSchedulerHalted        = true;
   this->m_nLastSource             = UPDATE_SOURCE_NONE;
+  this->m_lNextTaskCheck          = 0;
 };
 
 
@@ -158,6 +159,8 @@ void CDBTaskScheduler::invokeTask(uint32_t dwScheduleID)
       #endif 
       
       rs.setData(1, (void*)&dwLastExec, sizeof(dwLastExec));
+
+      this->m_lNextTaskCheck = 0;
     };
   };
 };
@@ -358,93 +361,98 @@ void CDBTaskScheduler::handleTask()
   int                 nReSchedule;
   byte                bData[201];
   int                 nEnabled;
-  
-  if((this->m_bSchedulerHalted == false) && (ClockPtr != NULL))
-  {
-    #ifdef SCHEDULER_DEBUG
-      Serial.println(F("[Sched] Check Schedules:"));
-    #endif
 
-    if(this->m_pScheduleTable != NULL)
-    {
-      if(this->m_pScheduleTable->isOpen() == true)
-      {
-        pRecordset = new CWSFFileDBRecordset(this->m_pScheduleTable);
+  if(this->m_lNextTaskCheck < millis())
+  {
+    this->m_lNextTaskCheck = millis() + TASK_SCHEDULER_TIME;
     
-        while(pRecordset->haveValidEntry() == true)
+    if((this->m_bSchedulerHalted == false) && (ClockPtr != NULL))
+    {
+      #ifdef SCHEDULER_DEBUG
+        Serial.println(F("[Sched] Check Schedules:"));
+      #endif
+  
+      if(this->m_pScheduleTable != NULL)
+      {
+        if(this->m_pScheduleTable->isOpen() == true)
         {
-          pRecordset->getData(0, (void*)&nScheduleType, sizeof(nScheduleType));
-          pRecordset->getData(1, (void*)&dwLastExec, sizeof(dwLastExec));
-          pRecordset->getData(2, (void*)&nTries, sizeof(nTries));
-          pRecordset->getData(3, (void*)&nMaxTrys, sizeof(nMaxTrys));
-          pRecordset->getData(4, (void*)&nReSchedule, sizeof(nReSchedule));
-          pRecordset->getData(5, (void*)&bData, sizeof(bData));
-          pRecordset->getData(6, (void*)&nEnabled, sizeof(nEnabled));
+          pRecordset = new CWSFFileDBRecordset(this->m_pScheduleTable);
+      
+          while(pRecordset->haveValidEntry() == true)
+          {
+            pRecordset->getData(0, (void*)&nScheduleType, sizeof(nScheduleType));
+            pRecordset->getData(1, (void*)&dwLastExec, sizeof(dwLastExec));
+            pRecordset->getData(2, (void*)&nTries, sizeof(nTries));
+            pRecordset->getData(3, (void*)&nMaxTrys, sizeof(nMaxTrys));
+            pRecordset->getData(4, (void*)&nReSchedule, sizeof(nReSchedule));
+            pRecordset->getData(5, (void*)&bData, sizeof(bData));
+            pRecordset->getData(6, (void*)&nEnabled, sizeof(nEnabled));
+    
+            #ifdef SCHEDULER_DEBUG
+              Serial.print(F("[Sched] check Schedule "));
+              Serial.print(pRecordset->getRecordPos());
+              Serial.print(F(": type: "));
+              Serial.print(nScheduleType);
+              Serial.print(F(": time: "));
+              Serial.print(dwLastExec);
+              Serial.print(F(" / "));
+              Serial.print(ClockPtr->getUnixTimestamp());
+              Serial.print(F(" TTE: "));
+              Serial.print((dwLastExec > ClockPtr->getUnixTimestamp() ? dwLastExec - ClockPtr->getUnixTimestamp() : 0));
+              Serial.print(F(", enabled: "));
+              Serial.println(nEnabled);
+            #endif 
+      
+            if(nEnabled == 1)
+            {
+              if((nTries < nMaxTrys) || (nMaxTrys == 0))
+              {
+                if(dwLastExec < ClockPtr->getUnixTimestamp())
+                {
+                  dwLastExec = ClockPtr->getUnixTimestamp() + (uint32_t)nReSchedule;
+                  nTries    += 1;
+        
+                  pRecordset->setData(1, (void*)&dwLastExec, sizeof(dwLastExec));
+                  pRecordset->setData(2, (void*)&nTries, sizeof(nTries));
+                  
+                  this->m_pScheduleCallback(pRecordset->getRecordPos(), nScheduleType, dwLastExec, nTries, nMaxTrys, (byte*)&bData);
+                };
+              }
+              else
+              {
+                #ifdef SCHEDULER_DEBUG
+                  Serial.print(F("[Sched] remove Schedule (on max): "));
+                  Serial.println(pRecordset->getRecordPos());
+                #endif 
+  
+                this->removeSchedule(pRecordset->getRecordPos(), false);
+              };
+            };
+            
+            pRecordset->moveNext();
+          };
+      
+          delete pRecordset;
   
           #ifdef SCHEDULER_DEBUG
-            Serial.print(F("[Sched] check Schedule "));
-            Serial.print(pRecordset->getRecordPos());
-            Serial.print(F(": type: "));
-            Serial.print(nScheduleType);
-            Serial.print(F(": time: "));
-            Serial.print(dwLastExec);
-            Serial.print(F(" / "));
-            Serial.print(ClockPtr->getUnixTimestamp());
-            Serial.print(F(" TTE: "));
-            Serial.print((dwLastExec > ClockPtr->getUnixTimestamp() ? dwLastExec - ClockPtr->getUnixTimestamp() : 0));
-            Serial.print(F(", enabled: "));
-            Serial.println(nEnabled);
-          #endif 
-    
-          if(nEnabled == 1)
-          {
-            if((nTries < nMaxTrys) || (nMaxTrys == 0))
-            {
-              if(dwLastExec < ClockPtr->getUnixTimestamp())
-              {
-                dwLastExec = ClockPtr->getUnixTimestamp() + (uint32_t)nReSchedule;
-                nTries    += 1;
-      
-                pRecordset->setData(1, (void*)&dwLastExec, sizeof(dwLastExec));
-                pRecordset->setData(2, (void*)&nTries, sizeof(nTries));
-                
-                this->m_pScheduleCallback(pRecordset->getRecordPos(), nScheduleType, dwLastExec, nTries, nMaxTrys, (byte*)&bData);
-              };
-            }
-            else
-            {
-              #ifdef SCHEDULER_DEBUG
-                Serial.print(F("[Sched] remove Schedule (on max): "));
-                Serial.println(pRecordset->getRecordPos());
-              #endif 
-
-              this->removeSchedule(pRecordset->getRecordPos(), false);
-            };
-          };
-          
-          pRecordset->moveNext();
+            Serial.println(F("[Sched] End Check Schedules"));
+          #endif
+        }
+        else
+        {
+          Serial.println(F("[Sched] Schedule DB failed"));
         };
-    
-        delete pRecordset;
-
-        #ifdef SCHEDULER_DEBUG
-          Serial.println(F("[Sched] End Check Schedules"));
-        #endif
       }
       else
       {
-        Serial.println(F("[Sched] Schedule DB failed"));
+        Serial.println(F("[Sched] Schedule DB NULL"));
       };
     }
     else
     {
-      Serial.println(F("[Sched] Schedule DB NULL"));
+      #ifdef SCHEDULER_DEBUG
+        Serial.println(F("[Sched] halted (or clock error)"));
+      #endif
     };
-  }
-  else
-  {
-    #ifdef SCHEDULER_DEBUG
-      Serial.println(F("[Sched] halted (or clock error)"));
-    #endif
   };
 };

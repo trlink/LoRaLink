@@ -2,8 +2,9 @@
 //////////
 #include "WebServer.h"
 #include "LoRaLinkConfig.h"
+#include "HardwareConfig.h"
 #include <memory>
-#include "CFileUtils.h"
+#include "helper.h"
 #include <HTTPBodyParser.hpp>
 #include <HTTPMultipartBodyParser.hpp>
 #include <HTTPURLEncodedBodyParser.hpp>
@@ -90,7 +91,10 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
 
   if(folder.length() <= 0)
   {
-    Serial.println(F("Missing folder"));
+    #ifdef WEBSERVERDEBUG
+      Serial.println(F("Missing folder"));
+    #endif
+    
     folder="/";
   };
   
@@ -133,8 +137,10 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
       filename = folder + "/" + parser->getFieldFilename();
       mimeType = parser->getFieldMimeType();
 
-      // We log all three values, so that you can observe the upload on the serial monitor:
-      Serial.printf("handleFormUpload: field name='%s', filename='%s', mimetype='%s'\n", name.c_str(), filename.c_str(), mimeType.c_str());
+      #ifdef WEBSERVERDEBUG
+        // We log all three values, so that you can observe the upload on the serial monitor:
+        Serial.printf("handleFormUpload: field name='%s', filename='%s', mimetype='%s'\n", name.c_str(), filename.c_str(), mimeType.c_str());
+      #endif
 
       if(filename.length() > 0)
       {
@@ -167,7 +173,9 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
         }
         else
         {
-          Serial.println(F("Unable to open upload file..."));
+          #ifdef WEBSERVERDEBUG
+            Serial.println(F("Unable to open upload file..."));
+          #endif
         };
   
         delete buf;
@@ -263,26 +271,26 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
 
 String getContentType(String strFile)
 {
-  if (strFile.endsWith(".html")) return "text/html";
-  else if (strFile.endsWith(".dat")) return "application/x-ns-proxy-autoconfig";
-  else if (strFile.endsWith(".htm")) return "text/html";
-  else if (strFile.endsWith(".css")) return "text/css";
-  else if (strFile.endsWith(".json")) return "application/json";
-  else if (strFile.endsWith(".js")) return "application/javascript";
-  else if (strFile.endsWith(".png")) return "image/png";
-  else if (strFile.endsWith(".gif")) return "image/gif";
-  else if (strFile.endsWith(".jpg")) return "image/jpeg";
-  else if (strFile.endsWith(".ico")) return "image/x-icon";
-  else if (strFile.endsWith(".svg")) return "image/svg+xml";
-  else if (strFile.endsWith(".eot")) return "font/eot";
-  else if (strFile.endsWith(".woff")) return "font/woff";
-  else if (strFile.endsWith(".woff2")) return "font/woff2";
-  else if (strFile.endsWith(".ttf")) return "font/ttf";
-  else if (strFile.endsWith(".xml")) return "text/xml";
-  else if (strFile.endsWith(".pdf")) return "application/pdf";
-  else if (strFile.endsWith(".zip")) return "application/zip";
-  else if(strFile.endsWith(".gz")) return "application/x-gzip";
-  else return "text/plain";
+  if (strFile.endsWith(".html")) return String(F("text/html"));
+  else if (strFile.endsWith(".dat")) return String(F("application/x-ns-proxy-autoconfig"));
+  else if (strFile.endsWith(".htm")) return String(F("text/html"));
+  else if (strFile.endsWith(".css")) return String(F("text/css"));
+  else if (strFile.endsWith(".json")) return String(F("application/json"));
+  else if (strFile.endsWith(".js")) return String(F("application/javascript"));
+  else if (strFile.endsWith(".png")) return String(F("image/png"));
+  else if (strFile.endsWith(".gif")) return String(F("image/gif"));
+  else if (strFile.endsWith(".jpg")) return String(F("image/jpeg"));
+  else if (strFile.endsWith(".ico")) return String(F("image/x-icon"));
+  else if (strFile.endsWith(".svg")) return String(F("image/svg+xml"));
+  else if (strFile.endsWith(".eot")) return String(F("font/eot"));
+  else if (strFile.endsWith(".woff")) return String(F("font/woff"));
+  else if (strFile.endsWith(".woff2")) return String(F("font/woff2"));
+  else if (strFile.endsWith(".ttf")) return String(F("font/ttf"));
+  else if (strFile.endsWith(".xml")) return String(F("text/xml"));
+  else if (strFile.endsWith(".pdf")) return String(F("application/pdf"));
+  else if (strFile.endsWith(".zip")) return String(F("application/zip"));
+  else if(strFile.endsWith(".gz")) return String(F("application/x-gzip"));
+  else return String(F("text/plain"));
 };
 
 void handleRedirect(HTTPRequest * req, HTTPResponse * res)

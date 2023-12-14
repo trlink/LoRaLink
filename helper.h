@@ -4,6 +4,7 @@
 //includes
 //////////
 #include <Arduino.h>
+#include <FS.h>
 
 
 #if LORALINK_HARDWARE_BATSENSE == 1
@@ -18,5 +19,8 @@ bool CheckIfDeviceExist(int nDevAddr);
 
 
 String split(String s, char parser, int index);
+
+
+bool WriteFile(fs::FS &fs, const char *szFile, byte *pData, int nLength);
 
 #endif

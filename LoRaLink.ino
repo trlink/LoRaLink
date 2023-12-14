@@ -27,14 +27,16 @@
 
 //defines
 /////////
-#define WEBAPIDEBUG
-#define WEBAPIDEBUGX
-#define TCPAPIDEBUG
-#define TCPAPIERROR
+//#define WEBAPIDEBUG
+//#define WEBAPIDEBUGX
+//#define TCPAPIDEBUG
+//#define TCPAPIERROR
 //#define SERIAL1DEBUG
 //#define GPSSTATSDEBUG
 
-//struct to store recieved data and handle it in another thread
+
+
+//struct to store received data and handle it in another thread
 struct _sModemData
 {
   byte                     *pData;
@@ -57,6 +59,7 @@ void ModemDataTask(void *pParam);
 void OnSchedule(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData);
 void OnTaskScheduleRemove(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData, bool bSuccess);
 void OnLoRaLinkProtocolData(byte *pData, int nDataLen);
+
 
 
 //globals
@@ -82,11 +85,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 #ifdef LORALINK_HARDWARE_TBEAM
   AXP20X_Class         *g_pAxp            = new AXP20X_Class(); 
 
-  #if LORALINK_HARDWARE_OLED == 0
-    //oled and axp share SDA/SCL, so when OLED is present
-    //we use the same IIC instance as the display...
-    TwoWire             g_axp_iic(0);
-  #endif
+  //oled and axp share SDA/SCL, so when OLED is present
+  //we use the same IIC instance as the display...
+  TwoWire             g_axp_iic           = Wire;
 #endif
 
 
@@ -98,7 +99,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
 
 #if LORALINK_HARDWARE_OLED == 1
-  TwoWire               g_display_iic(0);
+  TwoWire               g_display_iic = Wire;
   Adafruit_SSD1306      g_display;
 
   //function predecl
@@ -139,6 +140,71 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   //function predecl
   //////////////////
   void ConnectToLoraLinkServer();
+  void EnableWiFi();
+
+
+  void EnableWiFi()
+  {
+    //variables
+    ///////////
+    IPAddress IP;
+
+    WiFi.mode(WIFI_OFF);
+
+    LoRaWiFiApCfg.bWiFiEnabled = true;
+
+    Serial.println(F("Enable WiFi:"));
+
+    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+    {
+      WiFi.mode(WIFI_AP_STA);
+    }
+    else 
+    {
+      WiFi.mode(WIFI_AP);  
+    };
+
+    WiFi.hostname("loralink");
+
+
+    // Remove the password parameter, if you want the AP (Access Point) to be open
+    if(strlen(LoRaWiFiApCfg.szWLANPWD) > 0) 
+    {
+      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, LoRaWiFiApCfg.szWLANPWD, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
+    }
+    else 
+    {
+      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, NULL, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
+    };
+    
+    if(IP.fromString(LoRaWiFiApCfg.szDevIP)) 
+    {
+      IPAddress NMask(255, 255, 255, 0);
+      
+      WiFi.softAPConfig(IP, IP, NMask);
+    }; 
+
+
+    //check for WiFi Connect
+    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+    {
+      Serial.print(F("Connect to WiFi: "));
+      Serial.println(LoRaWiFiCfg.szWLANSSID);
+
+      WiFi.onEvent(WiFiStationConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+      WiFi.onEvent(WiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+      WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+      
+      if(strlen(LoRaWiFiCfg.szWLANPWD) > 0)
+      {
+        WiFi.begin(LoRaWiFiCfg.szWLANSSID, LoRaWiFiCfg.szWLANPWD);
+      }
+      else
+      {
+        WiFi.begin(LoRaWiFiCfg.szWLANSSID);
+      };
+    };
+  };
   
 
   void WebServerTask(void *pParam)
@@ -1175,7 +1241,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   
         nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
   
-        if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_ADMIN, (byte*)&szOutput, nLength) == true)
+        if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_ADMIN, (byte*)&szOutput, nLength) == true)
         {
           Serial.print(F("Config written..."));
         };
@@ -1266,7 +1332,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_CLNT, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_CLNT, (byte*)&szOutput, nLength) == true)
             {
               Serial.print(F("Config written..."));
             };
@@ -1292,7 +1358,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_MODEM, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_MODEM, (byte*)&szOutput, nLength) == true)
             {
               Serial.print(F("Config written..."));
             };
@@ -1319,7 +1385,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_AP, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_WIFI_AP, (byte*)&szOutput, nLength) == true)
             {
               Serial.print(F("Config written..."));
             };
@@ -1346,7 +1412,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DDNS, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DDNS, (byte*)&szOutput, nLength) == true)
             {
               Serial.println(F("Config written..."));
             };
@@ -1373,7 +1439,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_IPLINK, (byte*)szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_IPLINK, (byte*)szOutput, nLength) == true)
             {
               Serial.println(F("Config written..."));
             };
@@ -1400,7 +1466,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
       
-            if(CFileUtils::WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)&szOutput, nLength) == true)
             {
               Serial.println(F("Config written..."));
             };
@@ -2811,13 +2877,13 @@ void setup()
     //power button stuff
     //Register the PMU interrupt pin, it will be triggered on the falling edge
     pinMode(PMU_IRQ_PIN, INPUT);
-    
-    #if LORALINK_HARDWARE_OLED == 1
-      nRes = g_pAxp->begin(g_display_iic, AXP192_SLAVE_ADDRESS);
-    #else
-      nRes = g_pAxp->begin(g_axp_iic, AXP192_SLAVE_ADDRESS);
+
+    #if LORALINK_HARDWARE_OLED == 0
+      g_axp_iic.begin();
     #endif
     
+    nRes = g_pAxp->begin(g_axp_iic, AXP192_SLAVE_ADDRESS);
+  
     if(nRes == AXP_FAIL) 
     {
       Serial.println(F("failed to initialize communication with AXP192"));
@@ -2966,6 +3032,11 @@ void setup()
     {
       LORALINK_FIRMWARE_FS.remove(szHotfixFile);
 
+      #if LORALINK_HARDWARE_OLED == 1
+        g_display.print(F("Update complete...\n"));
+        g_display.display();
+      #endif
+
       delay(5000);
       ESP.restart();
     };
@@ -3035,23 +3106,10 @@ void setup()
       g_display.display();
     #endif
 
-    WiFi.mode(WIFI_OFF);
+    EnableWiFi();
 
     Serial.println(F("Scan for networks:"));
 
-    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
-    {
-      WiFi.mode(WIFI_AP_STA);
-    }
-    else 
-    {
-      WiFi.mode(WIFI_AP);  
-    };
-
-
-    WiFi.hostname("loralink");
-
-    
     //scan for networks
     LoRaWiFiCfg.nAvailNetworks = WiFi.scanNetworks();
     
@@ -3071,54 +3129,8 @@ void setup()
       };
     };
 
-  
-    // Remove the password parameter, if you want the AP (Access Point) to be open
-    if(strlen(LoRaWiFiApCfg.szWLANPWD) > 0) 
-    {
-      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, LoRaWiFiApCfg.szWLANPWD, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
-    }
-    else 
-    {
-      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, NULL, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
-    };
-    
-    if(IP.fromString(LoRaWiFiApCfg.szDevIP)) 
-    {
-      IPAddress NMask(255, 255, 255, 0);
-      
-      WiFi.softAPConfig(IP, IP, NMask);
-    }; 
-
-
-    if(IpLinkConfig.bServerEnabled == true)
-    {
-      g_pTCPServer = new CTCPServer(IpLinkConfig.wServerPort, onIpClientConnect);
-      g_pTCPServer->setInterval(0);
-
-      g_pTaskHandler->addTask(g_pTCPServer);
-    };
-
-
-    //check for WiFi Connect
     if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
     {
-      Serial.print(F("Connect to WiFi: "));
-      Serial.println(LoRaWiFiCfg.szWLANSSID);
-
-      WiFi.onEvent(WiFiStationConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
-      WiFi.onEvent(WiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-      WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-      
-      if(strlen(LoRaWiFiCfg.szWLANPWD) > 0)
-      {
-        WiFi.begin(LoRaWiFiCfg.szWLANSSID, LoRaWiFiCfg.szWLANPWD);
-      }
-      else
-      {
-        WiFi.begin(LoRaWiFiCfg.szWLANSSID);
-      };
-
-
       //check for dyndns config
       if(strlen(DynDNSConfig.szProvider) > 0)
       {
@@ -3140,6 +3152,15 @@ void setup()
         });
   
         ResetWatchDog();
+      };
+
+
+      if(IpLinkConfig.bServerEnabled == true)
+      {
+        g_pTCPServer = new CTCPServer(IpLinkConfig.wServerPort, onIpClientConnect);
+        g_pTCPServer->setInterval(0);
+  
+        g_pTaskHandler->addTask(g_pTCPServer);
       };
     };
     
@@ -3249,9 +3270,8 @@ void setup()
   g_pTaskHandler->addTask(g_pSkyNetConnection);
 
 
-  //every x min
-  g_pDbTaskScheduler->setInterval(TASK_SCHEDULER_TIME);
-  
+  //add the db task scheduler to the task 
+  //handler
   g_pTaskHandler->addTask(g_pDbTaskScheduler);
 
 
@@ -3264,14 +3284,14 @@ void setup()
     sTaskData.dwLastFile    = 0;
     sTaskData.dwLastRequest = 0;
     
-    g_pDbTaskScheduler->addSchedule(DBTASK_RSTFILETRANSFER, 0, 600, (byte*)&sTaskData, true);
+    g_pDbTaskScheduler->addSchedule(DBTASK_RSTFILETRANSFER, 600, 0, (byte*)&sTaskData, true);
   };
 
   #if LORALINK_HARDWARE_WIFI == 1
   
     if(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_CHECKWEBSERVER) == 0)
     {
-      g_pDbTaskScheduler->addSchedule(DBTASK_CHECKWEBSERVER, 0, 600, NULL, true);
+      g_pDbTaskScheduler->addSchedule(DBTASK_CHECKWEBSERVER, 600, 0, NULL, true);
     };
   
   #endif
@@ -3372,8 +3392,15 @@ void loop()
 
     if(g_pUserButton->pressed() == true)
     {
-      Serial.println(F("User Button pressed"));
-      
+      if(LoRaWiFiApCfg.bWiFiEnabled == true)
+      {
+        LoRaWiFiApCfg.bWiFiEnabled = false;
+        WiFi.mode(WIFI_OFF);
+      }
+      else
+      {
+        EnableWiFi();
+      };
     };
     
     LLSystemState.lMemFreeOverall           = esp_get_free_heap_size();
@@ -3807,7 +3834,14 @@ void ModemDataTask(void *pParam)
           //LoRa Msgs
           case 3:
           {
-            sprintf_P(szText, PSTR("Proto MSGS: %i\nAP IP: %s\nIP: %s\0"), LLSystemState.lOutstandingMsgs, LoRaWiFiApCfg.szDevIP, LoRaWiFiCfg.szDevIP);
+            if(LoRaWiFiApCfg.bWiFiEnabled == true)
+            {
+              sprintf_P(szText, PSTR("Proto MSGS: %i\nAP IP: %s\nIP: %s\0"), LLSystemState.lOutstandingMsgs, LoRaWiFiApCfg.szDevIP, LoRaWiFiCfg.szDevIP);
+            }
+            else
+            {
+              sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: OFF\0"), LLSystemState.lOutstandingMsgs);
+            };
        
             w = 0; h = 13;
             g_display.setCursor(w, h);

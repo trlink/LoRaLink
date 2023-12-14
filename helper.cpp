@@ -28,43 +28,53 @@
 
 bool CheckIfDeviceExist(int nDevAddr)
 {
-  #ifdef LORALINK_HARDWARE_TBEAM
-
-    #if LORALINK_HARDWARE_OLED == 1
-      g_display_iic.beginTransmission(nDevAddr);
+  Wire.beginTransmission(nDevAddr);
       
-      if(g_display_iic.endTransmission() == 0) 
-      {
-        return true;
-      };
-    #else
-      g_axp_iic.beginTransmission(nDevAddr);
-      
-      if(g_axp_iic.endTransmission() == 0) 
-      {
-        return true;
-      };
-    #endif
-  #else
-    #if LORALINK_HARDWARE_OLED == 1
-      g_display_iic.beginTransmission(nDevAddr);
-        
-      if(g_display_iic.endTransmission() == 0) 
-      {
-        return true;
-      };
-    #else
-      Wire.beginTransmission(nDevAddr);
-        
-      if(Wire.endTransmission() == 0) 
-      {
-        return true;
-      };
-    #endif
-  #endif
-  
+  if(Wire.endTransmission() == 0) 
+  {
+    return true;
+  };
+    
   return false;
 };
+
+
+bool WriteFile(fs::FS &fs, const char *szFile, byte *pData, int nLength) 
+{
+  Serial.print(F("Write file: "));
+  Serial.print(szFile);
+
+  if(nLength > 0)
+  {
+    File file = fs.open(szFile, FILE_WRITE);
+    
+    if(!file)
+    {
+        Serial.println(F(" - failed to open file for writing"));
+        return false;
+    }
+    
+    if(file.write(pData, nLength))
+    {
+        Serial.println(F(" - file written"));
+
+        return true;
+    } 
+    else 
+    {
+        Serial.println(F(" - write failed"));
+
+        return false;
+    };
+  }
+  else
+  {
+    Serial.println(F(" size 0 - write failed"));
+
+    return false;
+  };
+};
+
 
 
 String split(String s, char parser, int index) 

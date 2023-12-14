@@ -33,7 +33,6 @@
 #define SKYNET_CMD_KEEPALIVE            2
 #define SKYNET_CMD_QUERY                3
 #define SKYNET_CMD_DATA                 4
-#define SKYNET_CMD_PING                 5
 #define SKYNET_CMD_PROTOCOL_MSG         6
 
 
@@ -93,9 +92,6 @@ int  encodeSkyNetProtocolMessage(_sSkyNetProtocolMessage *pMsg, byte *pData);
 //send a local keep alive
 int KEEPALIVE_IND(byte *pResult, uint32_t dwMsgID, uint32_t dwSenderID);
 
-//this command pings a specific node
-int PING_REQ(byte *pResult, uint32_t dwMsgID, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwOriginID, uint32_t  dwViaID);
-int PING_RESP(byte *pResult, uint32_t dwMsgID, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwOriginID, uint32_t  dwViaID);
 
 //this command confirmes a forwarded message, which needs a confirmation
 //that it was transferred to another node

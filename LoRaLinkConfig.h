@@ -5,7 +5,7 @@
 //////////
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include "CFileUtils.h"
+#include "helper.h"
 
 
 
@@ -57,6 +57,7 @@ struct sLoRaWiFiCfg
   //non volatile (helper variables)
   int  nAvailNetworks;
   char **szNetwork;
+  bool bWiFiEnabled;
 };
 
 

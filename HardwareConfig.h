@@ -18,6 +18,11 @@
   #define INFO_CARD_SWITCH_INTERVAL             7000    //time in ms after the info display will be changed
   #define LORALINK_POSITION_INTERVAL_SECONDS    15
 
+
+
+  //hardware
+  //////////
+  
   //for t-beam devices uncomment this line
   //#define LORALINK_HARDWARE_TBEAM
 
@@ -50,17 +55,22 @@
     #include "Arduino.h"
     #include <driver/adc.h>
     #include <esp_task_wdt.h>
-    #include <DNSServer.h>
-    #include <SD.h>
     #include <SPI.h>
-    #include <SPIFFS.h>
     #include <SX126XLT.h>
-    #include <EasyDDNS.h>
-
+    #if LORALINK_HARDWARE_WIFI == 1
+      #include <DNSServer.h>
+      #include <EasyDDNS.h>
+    #endif
+    #if LORALINK_HARDWARE_SDCARD == 1
+      #include <SD.h>
+    #endif
+    #if LORALINK_HARDWARE_SPIFFS == 1
+      #include <SPIFFS.h>  
+    #endif
 
     
     #define LORALINK_HARDWARE_NAME  "Heltec ESP32 (SX1262) WiFi LoRa 433MHz"
-    #define LORALINK_FIRMWARE_FILE  "/LoRaLink.ino.ttgo-lora32-v1.bin"
+    #define LORALINK_FIRMWARE_FILE  "/HeltecV3.bin"
     
     //general hardware options
     //////////////////////////
@@ -86,8 +96,8 @@
     #if LORALINK_HARDWARE_SDCARD == 1
       #define LORALINK_HARDWARE_SDCARD_MISO 22
       #define LORALINK_HARDWARE_SDCARD_MOSI 21
-      #define LORALINK_HARDWARE_SDCARD_SCK  17
-      #define LORALINK_HARDWARE_SDCARD_CS   13
+      #define LORALINK_HARDWARE_SDCARD_SCK  13
+      #define LORALINK_HARDWARE_SDCARD_CS   17
     #endif
 
     #define USER_BUTTON                      38
@@ -139,12 +149,18 @@
     #include "Arduino.h"
     #include <driver/adc.h>
     #include <esp_task_wdt.h>
-    #include <DNSServer.h>
     #include <SPI.h>
-    #include <SD.h>
-    #include <SPIFFS.h>
-    #include <EasyDDNS.h>
-
+    #include <SX127XLT.h>
+    #if LORALINK_HARDWARE_WIFI == 1
+      #include <DNSServer.h>
+      #include <EasyDDNS.h>
+    #endif
+    #if LORALINK_HARDWARE_SDCARD == 1
+      #include <SD.h>
+    #endif
+    #if LORALINK_HARDWARE_SPIFFS == 1
+      #include <SPIFFS.h>  
+    #endif
     
     //general hardware options
     //////////////////////////        
@@ -154,7 +170,7 @@
 
 
     #define LORALINK_HARDWARE_NAME  "ESP32 WiFi LoRa (SX1278) 433MHz"
-    #define LORALINK_FIRMWARE_FILE  "/hotfix/LoRaLink.ino.ttgo-lora32-v1.bin"
+    #define LORALINK_FIRMWARE_FILE  "/ESP.bin"
     
 
     //utility defines
@@ -204,8 +220,6 @@
       extern Adafruit_SSD1306 g_display;
     #endif       
 
-    #include <SX127XLT.h>
-    
     //LoRa Modem defines
     #define LORALINK_MODEM_TYPE              DEVICE_SX1278
     #define LORALINK_MODEM_SCK               5        
@@ -227,11 +241,18 @@
     #include "Arduino.h"
     #include <driver/adc.h>
     #include <esp_task_wdt.h>
-    #include <DNSServer.h>
     #include <SPI.h>
-    #include <SD.h>
-    #include <SPIFFS.h>
-    #include <EasyDDNS.h>
+    #include <SX127XLT.h>
+    #if LORALINK_HARDWARE_WIFI == 1
+      #include <DNSServer.h>
+      #include <EasyDDNS.h>
+    #endif
+    #if LORALINK_HARDWARE_SDCARD == 1
+      #include <SD.h>
+    #endif
+    #if LORALINK_HARDWARE_SPIFFS == 1
+      #include <SPIFFS.h>  
+    #endif
     #include <axp20x.h>             //https://github.com/lewisxhe/AXP202X_Library
 
 
@@ -244,7 +265,7 @@
 
 
     #define LORALINK_HARDWARE_NAME  "T-Beam WiFi LoRa (SX1276) 433MHz"
-    #define LORALINK_FIRMWARE_FILE  "/hotfix/LoRaLink.ino.ttgo-lora32-v1.bin"
+    #define LORALINK_FIRMWARE_FILE  "/TBeam.bin"
     
 
     
@@ -304,7 +325,7 @@
 
     
 
-    #include <SX127XLT.h>
+    
     
     //LoRa Modem defines
     #define LORALINK_MODEM_TYPE              DEVICE_SX1278
