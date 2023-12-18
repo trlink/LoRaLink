@@ -81,6 +81,7 @@ void ReadDeviceConfig()
     DeviceConfig.fBattCorrection = 0.0;
     memset(DeviceConfig.szBlockedNodes, 0, sizeof(DeviceConfig.szBlockedNodes));
     DeviceConfig.nMaxShoutOutEntries = 100;
+    DeviceConfig.nMaxUser = 10;
     
     PrepareSerializeDeviceConfig(doc);
 
@@ -515,6 +516,11 @@ void DeSerializeDeviceConfig(DynamicJsonDocument &doc)
   {
     DeviceConfig.nMaxShoutOutEntries = doc[F("nMaxShoutOutEntries")];
   };
+
+  if(doc.containsKey(F("nMaxUser")))
+  {
+    DeviceConfig.nMaxUser = doc[F("nMaxUser")];
+  };
 };
 
 
@@ -533,6 +539,7 @@ void PrepareSerializeDeviceConfig(DynamicJsonDocument &doc)
   doc[F("fLocE")] = DeviceConfig.fLocE;
   doc[F("szBlockedNodes")] = DeviceConfig.szBlockedNodes;
   doc[F("nMaxShoutOutEntries")] = DeviceConfig.nMaxShoutOutEntries;
+  doc[F("nMaxUser")] = DeviceConfig.nMaxUser;
 };
 
 

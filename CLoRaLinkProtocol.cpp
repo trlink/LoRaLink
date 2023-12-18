@@ -1206,7 +1206,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
                     memset(szDatabaseFile, 0, 200);
                     memcpy(szDatabaseFile, &task, sizeof(sDBTaskSendFile));
       
-                    this->m_pdbTaskScheduler->addSchedule(DBTASK_REQUESTFILEDATA, 60, 600, (byte*)szDatabaseFile, true);
+                    this->m_pdbTaskScheduler->addSchedule(DBTASK_REQUESTFILEDATA, 600, 600, (byte*)szDatabaseFile, true);
                   }
                   else
                   {

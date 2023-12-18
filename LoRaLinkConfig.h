@@ -73,6 +73,7 @@ struct sDeviceConfig
   char     cPosOrientation;
   char     szBlockedNodes[50];
   int      nMaxShoutOutEntries;
+  int      nMaxUser;
   float    fBattCorrection;
 };
 

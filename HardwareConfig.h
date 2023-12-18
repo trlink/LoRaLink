@@ -122,7 +122,6 @@
       #define LORALINK_HARDWARE_SCREEN_ADDRESS  0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
       #define LORALINK_HARDWARE_OLED_SDA        SDA_OLED
       #define LORALINK_HARDWARE_OLED_SCL        SCL_OLED
-      extern TwoWire          g_display_iic;
       extern Adafruit_SSD1306 g_display;
     #endif
 
@@ -216,7 +215,6 @@
       #define LORALINK_HARDWARE_SCREEN_ADDRESS  0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
       #define LORALINK_HARDWARE_OLED_SDA        4
       #define LORALINK_HARDWARE_OLED_SCL        15
-      extern TwoWire          g_display_iic;
       extern Adafruit_SSD1306 g_display;
     #endif       
 
@@ -275,7 +273,6 @@
 
     //variables
     ///////////
-    extern TwoWire       g_axp_iic;
     extern AXP20X_Class *g_pAxp;
 
     //includes
@@ -319,7 +316,6 @@
       #define LORALINK_HARDWARE_SCREEN_ADDRESS  0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
       #define LORALINK_HARDWARE_OLED_SDA        SDA
       #define LORALINK_HARDWARE_OLED_SCL        SCL
-      extern TwoWire                            g_display_iic;
       extern Adafruit_SSD1306                   g_display;
     #endif       
 

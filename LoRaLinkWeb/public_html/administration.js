@@ -768,6 +768,7 @@ function getDeviceConfig() {
                 $("#txtSettingsDeviceLon").val(msg["fLocE"]);
                 $("#txtSettingsDeviceBlocked").val(msg["szBlockedNodes"]);
                 $("#txtSettingsDeviceShoutOut").val(msg["nMaxShoutOutEntries"]);
+                $("#txtSettingsMaxUser").val(msg["nMaxUser"]);
                 
                 getLinkConfig();
             }
@@ -1238,6 +1239,7 @@ function btnSaveDevice_Click() {
                       ' "szDevName": "' + strDevName + '", ' +
                       ' "szDevOwner": "' + strDevOwner + '", ' +
                       ' "nDeviceType": ' + $("#cmbSettingsDeviceType").val() + ', ' +
+                      ' "nMaxUser": ' + $("#txtSettingsMaxUser").val() + ', ' +
                       ' "nMaxShoutOutEntries": ' + $("#txtSettingsDeviceShoutOut").val() + ', ' +
                       ' "fLocN": ' + parseFloatDefault($("#txtSettingsDeviceLat").val(), 0.0) + ', ' +
                       ' "fLocE": ' + parseFloatDefault($("#txtSettingsDeviceLon").val(), 0.0) + ', ' +

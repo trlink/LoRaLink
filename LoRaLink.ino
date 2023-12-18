@@ -84,10 +84,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
 #ifdef LORALINK_HARDWARE_TBEAM
   AXP20X_Class         *g_pAxp            = new AXP20X_Class(); 
-
-  //oled and axp share SDA/SCL, so when OLED is present
-  //we use the same IIC instance as the display...
-  TwoWire             g_axp_iic           = Wire;
 #endif
 
 
@@ -99,7 +95,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
 
 #if LORALINK_HARDWARE_OLED == 1
-  TwoWire               g_display_iic = Wire;
   Adafruit_SSD1306      g_display;
 
   //function predecl
@@ -815,7 +810,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     
       if((strlen(szUser) > 0) && (strlen(szPwd) > 0))
       {       
-        if(g_pUserTable->getRecordCount() < DBRESERVE_USER_COUNT)
+        if(g_pUserTable->getRecordCount() < DeviceConfig.nMaxUser)
         {
           if(CreateUser(szUser, szPwd, szMail) == true)
           {
@@ -2848,9 +2843,10 @@ void setup()
   
   #if LORALINK_HARDWARE_OLED == 1
     Serial.println(F("Init OLED"));
+
+    Wire.begin(LORALINK_HARDWARE_OLED_SDA, LORALINK_HARDWARE_OLED_SCL);
     
-    g_display_iic.begin(LORALINK_HARDWARE_OLED_SDA, LORALINK_HARDWARE_OLED_SCL);
-    g_display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &g_display_iic, LORALINK_HARDWARE_OLED_RESET);
+    g_display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, LORALINK_HARDWARE_OLED_RESET);
     
     // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
     if(!g_display.begin(SSD1306_SWITCHCAPVCC, LORALINK_HARDWARE_SCREEN_ADDRESS)) 
@@ -2879,10 +2875,10 @@ void setup()
     pinMode(PMU_IRQ_PIN, INPUT);
 
     #if LORALINK_HARDWARE_OLED == 0
-      g_axp_iic.begin();
+      Wire.begin();
     #endif
     
-    nRes = g_pAxp->begin(g_axp_iic, AXP192_SLAVE_ADDRESS);
+    nRes = g_pAxp->begin(Wire, AXP192_SLAVE_ADDRESS);
   
     if(nRes == AXP_FAIL) 
     {
@@ -3064,27 +3060,11 @@ void setup()
   {
     Serial.println(F("Found DS3231 - Init RTC clock"));
 
-    #ifdef LORALINK_HARDWARE_TBEAM
-      #if LORALINK_HARDWARE_OLED == 1
-        ClockPtr = new CClockHlpr(true, &g_display_iic);
-      #else
-        ClockPtr = new CClockHlpr(true, &g_axp_iic);
-      #endif
+    ClockPtr = new CClockHlpr(true, &Wire);
 
-      //update schedules after reboot
-      g_pDbTaskScheduler->rescheduleAfterTimechange();
-      g_pDbTaskScheduler->haltScheduler(false);
-    #else
-      #if LORALINK_HARDWARE_OLED == 1
-        ClockPtr = new CClockHlpr(true, &g_display_iic);
-      #else
-        ClockPtr = new CClockHlpr(true, &Wire);
-      #endif
-
-      //update schedules after reboot
-      g_pDbTaskScheduler->rescheduleAfterTimechange();
-      g_pDbTaskScheduler->haltScheduler(false);
-    #endif
+    //update schedules after reboot
+    g_pDbTaskScheduler->rescheduleAfterTimechange();
+    g_pDbTaskScheduler->haltScheduler(false);
   }
   else
   {
@@ -3511,7 +3491,7 @@ void loop()
             {
               LLSystemState.fAltitude   = fAlt;
               LLSystemState.nNumSat     = nSat;
-              LLSystemState.fLatitude   = fAlt;
+              LLSystemState.fLatitude   = fLat;
               LLSystemState.fLongitude  = fLon;
               LLSystemState.dwLastValid = millis();
               LLSystemState.fSpeed      = fSpeed;
@@ -3526,8 +3506,12 @@ void loop()
               };
 
               #ifdef GPSSTATSDEBUG
-                Serial.print(F("[GPS] difference to loc clock: "));
-                Serial.println(lDiff);
+                Serial.print(F("[GPS] difference to loc clock (sec): "));
+                Serial.print(lDiff);
+                Serial.print(F(" Lat: "));
+                Serial.print(fLat);
+                Serial.print(F(" Lon: "));
+                Serial.println(fLon);
               #endif
               
               //update clock if not already done, or time is from a remote or unknown source
