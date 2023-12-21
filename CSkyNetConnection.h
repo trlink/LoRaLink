@@ -33,8 +33,11 @@ struct _sSkyNetTransmission
 };
 
 
-
-typedef void(*tOnLoRaLinkProtocolData)(byte *pData, int nDataLen);
+/*
+ * this callback will be called, when a DATA_IND was received. The callback 
+ * will add the data to the loralink protocol handler.
+ */
+typedef void(*tOnLoRaLinkProtocolData)(void *pProtocolMsg, byte *pData, int nDataLen);
 
 
 
@@ -54,7 +57,7 @@ class CSkyNetConnection : public CTaskIF
 
     //protocol handling
     ///////////////////
-    void onLoRaLinkProtocolData(byte *pData, int nDataLen);
+    void onLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen);
 
     //task handling
     ///////////////

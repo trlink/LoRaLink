@@ -58,7 +58,7 @@ void BlinkTask(void *pParam);
 void ModemDataTask(void *pParam);
 void OnSchedule(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData);
 void OnTaskScheduleRemove(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData, bool bSuccess);
-void OnLoRaLinkProtocolData(byte *pData, int nDataLen);
+void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen);
 
 
 
@@ -845,7 +845,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
     if(strcmp_P(doc[F("command")], PSTR("UserLogin")) == 0)
     {
-      CWSFFileDBRecordset   *rsUser;     
+      CWSFFileDBRecordset  *rsUser;     
       char                 szHash[41];
       byte                 bBlocked = 0;
       uint32_t             dwTime = ClockPtr->getUnixTimestamp();
@@ -2863,7 +2863,9 @@ void setup()
     g_display.cp437(true);         // Use full 256 char 'Code Page 437' font
 
     // Clear the buffer
-    g_display.print(F("LoRaLink Init...\n"));
+    g_display.print(F("LoRaLink "));
+    g_display.print(LORALINK_VERSION_STRING);
+    g_display.print(F(" Init:\n"));
     g_display.display();
   #endif
 
@@ -3173,41 +3175,53 @@ void setup()
 
  
 
-  //start Modem
-  g_pModemTask = new CLoRaModem(OnReceivedModemData, OnModemStateChanged);
-  CSkyNetConnectionHandler *pModemConnHandler = new CSkyNetConnectionHandler(g_pModemTask, SKYNET_CONN_TYPE_LORA, g_pSkyNetConnection);
-  
-  g_pModemTask->setHandler(pModemConnHandler);
-
-  
-  //init modem:
-  Serial.print(F("Init LoRa Modem : "));
-  Serial.print(ModemConfig.lBandwidth);
-  Serial.print(F("khz @"));
-  Serial.print(ModemConfig.lFrequency / 1000);
-  Serial.print(F("kHz, SF "));
-  Serial.print(ModemConfig.nSpreadingFactor);
-  Serial.print(F(" CR "));
-  Serial.println(ModemConfig.nCodingRate);
-
-  //create modem task, the task is exclusively bound to core 0,
-  //it does not utilise a handler...
-  if(g_pModemTask->Init(ModemConfig.lFrequency, ModemConfig.nTxPower, ModemConfig.lBandwidth, ModemConfig.nSpreadingFactor, ModemConfig.nCodingRate, ModemConfig.nSyncWord, ModemConfig.nPreamble) == true)
-  {
-    //add the connection handler to a task handler
-    //since the taskhandler only handles the states, set the interval to 1sec
-    //the modem data has a seperate thread...
-    pModemConnHandler->setInterval(1000);
+  #if LORALINK_HARDWARE_LORA == 1
+    //start Modem
+    g_pModemTask = new CLoRaModem(OnReceivedModemData, OnModemStateChanged);
+    CSkyNetConnectionHandler *pModemConnHandler = new CSkyNetConnectionHandler(g_pModemTask, SKYNET_CONN_TYPE_LORA, g_pSkyNetConnection);
     
-    g_pTaskHandler->addTask(pModemConnHandler);
+    g_pModemTask->setHandler(pModemConnHandler);
   
-    //add to skynet connection
-    g_pSkyNetConnection->addHandler(pModemConnHandler);
   
-    //check if modem was initialized
-    if(ModemConfig.bDisableLoRaModem == false)
+    //init modem:
+    Serial.print(F("Init LoRa Modem : "));
+    Serial.print(ModemConfig.lBandwidth);
+    Serial.print(F("khz @"));
+    Serial.print(ModemConfig.lFrequency / 1000);
+    Serial.print(F("kHz, SF "));
+    Serial.print(ModemConfig.nSpreadingFactor);
+    Serial.print(F(" CR "));
+    Serial.println(ModemConfig.nCodingRate);
+  
+    //create modem task, the task is exclusively bound to core 0,
+    //it does not utilise a handler...
+    if(g_pModemTask->Init(ModemConfig.lFrequency, ModemConfig.nTxPower, ModemConfig.lBandwidth, ModemConfig.nSpreadingFactor, ModemConfig.nCodingRate, ModemConfig.nSyncWord, ModemConfig.nPreamble) == true)
     {
-      if(g_pModemTask->GetModemState() == MODEM_STATE_ERROR)
+      //add the connection handler to a task handler
+      //since the taskhandler only handles the states, set the interval to 1sec
+      //the modem data has a seperate thread...
+      pModemConnHandler->setInterval(1000);
+      
+      g_pTaskHandler->addTask(pModemConnHandler);
+    
+      //add to skynet connection
+      g_pSkyNetConnection->addHandler(pModemConnHandler);
+    
+      //check if modem was initialized
+      if(ModemConfig.bDisableLoRaModem == false)
+      {
+        if(g_pModemTask->GetModemState() == MODEM_STATE_ERROR)
+        {
+          Serial.print(F("Init Modem: FAILED"));
+          delay(5000);
+      
+          ESP.restart();
+        };
+      };
+    }
+    else
+    {
+      if(ModemConfig.bDisableLoRaModem == false)
       {
         Serial.print(F("Init Modem: FAILED"));
         delay(5000);
@@ -3215,20 +3229,11 @@ void setup()
         ESP.restart();
       };
     };
-  }
-  else
-  {
-    if(ModemConfig.bDisableLoRaModem == false)
-    {
-      Serial.print(F("Init Modem: FAILED"));
-      delay(5000);
-  
-      ESP.restart();
-    };
-  };
 
-  //this task is responsible to receive data and queue them internally
-  xTaskCreatePinnedToCore(ModemTask, "ModemTask", 8000, NULL, 1, &g_Core0TaskHandle, 0);
+    //this task is responsible to receive data and queue them internally
+    xTaskCreatePinnedToCore(ModemTask, "ModemTask", 8000, NULL, 1, &g_Core0TaskHandle, 0);
+
+  #endif
 
   //a task responsible for let the leds blink
   xTaskCreatePinnedToCore(BlinkTask, "BlinkTask", 1000, NULL, 1, &g_Core0TaskHandle1, 1);
@@ -3351,17 +3356,17 @@ void loop()
   long            lCheckTimer = 0;
 
   #if LORALINK_HARDWARE_GPS == 1
-      //variables
-      ///////////
-      int  year;
-      byte month, day, hour, minute, second, hundredths;
-      unsigned long age;
-      long lDiff;
-      unsigned short  sentences = 0, failed = 0, sentences2 = 0, failed2 = 0;
-      unsigned long   chars = 0, chars2 = 0;
-      float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
-      int nSat, nHDOP;
-      DateTime dtClock;
+    //variables
+    ///////////
+    int  year;
+    byte month, day, hour, minute, second, hundredths;
+    unsigned long age;
+    long lDiff;
+    unsigned short  sentences = 0, failed = 0, sentences2 = 0, failed2 = 0;
+    unsigned long   chars = 0, chars2 = 0;
+    float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
+    int nSat, nHDOP;
+    DateTime dtClock;
   #endif
   
   esp_task_wdt_init(180, false);
@@ -4579,7 +4584,7 @@ void OnSchedule(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, i
   
           if(nSuccess == 0)
           {
-            nSuccess = (g_pCLoRaProtocol->enqueueShoutOut(dwSender, (char*)&szUser, (char*)&szMsg, dwTime) == true ? 1 : 0);
+            nSuccess = (g_pCLoRaProtocol->enqueueShoutOut(dwSender, 0, (char*)&szUser, (char*)&szMsg, dwTime) == true ? 1 : 0);
   
             if(nSuccess == 1)
             {
@@ -4909,7 +4914,7 @@ void OnTaskScheduleRemove(uint32_t dwScheduleID, int nScheduleType, uint32_t dwL
 
 //called from the connection handler, when it receives
 //a DATA_IND
-void OnLoRaLinkProtocolData(byte *pData, int nDataLen)
+void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen)
 {
-  g_pCLoRaProtocol->handleLoRaLinkProtocolData(pData, nDataLen);
+  g_pCLoRaProtocol->handleLoRaLinkProtocolData((_sSkyNetProtocolMessage*)pProtocolMsg, pData, nDataLen);
 };

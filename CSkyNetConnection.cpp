@@ -125,9 +125,9 @@ void CSkyNetConnection::enqueueQueryRequest(uint32_t dwNodeID, char *szNodeName,
 };
 
 
-void CSkyNetConnection::onLoRaLinkProtocolData(byte *pData, int nDataLen)
+void CSkyNetConnection::onLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen)
 {
-  this->m_pOnLoRaLinkProtoData(pData, nDataLen);
+  this->m_pOnLoRaLinkProtoData(pProtocolMsg, pData, nDataLen);
 };
 
 

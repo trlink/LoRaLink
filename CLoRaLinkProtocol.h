@@ -16,7 +16,7 @@
 
 
 
-#define LLProtoMinHeaderLength              (1 + (2 * sizeof(uint32_t)))
+#define LLProtoMinHeaderLength              (1 + (1 * sizeof(uint32_t)))
 #define LLProtoBaseDebug                    1
 
 //message types
@@ -74,8 +74,8 @@ struct _sNewMessage
 
 
 //create header
-int  LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocolType, uint32_t dwSenderDevice, uint32_t dwSenderUserID);
-bool LLPROTO_Decode(byte *pData, int nDataLen, byte *pPayload, int *pnPayloadLen, int *pnProtocolType, uint32_t *pdwSenderDevice, uint32_t *pdwSenderUserID);
+int  LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocolType, uint32_t dwSenderUserID);
+bool LLPROTO_Decode(byte *pData, int nDataLen, byte *pPayload, int *pnPayloadLen, int *pnProtocolType, uint32_t *pdwSenderUserID);
   
 
 
@@ -137,7 +137,7 @@ class CLoRaLinkProtocol : public CTaskIF
     CLoRaLinkProtocol(CSkyNetConnection *pSkyNetConnection, CDBTaskScheduler *pdbTaskScheduler);
     ~CLoRaLinkProtocol();
 
-    bool handleLoRaLinkProtocolData(byte *pData, int nLength);
+    bool handleLoRaLinkProtocolData(_sSkyNetProtocolMessage *pProtocolMsg, byte *pData, int nLength);
     void handleTask();
 
     //functions
@@ -184,7 +184,7 @@ class CLoRaLinkProtocol : public CTaskIF
 
     //this method send the shout out to all known nodes
     //except the sender node
-    bool enqueueShoutOut(uint32_t dwSenderNodeID, char *szUser, char *szMsg, uint32_t dwTime);
+    bool enqueueShoutOut(uint32_t dwSenderNodeID, uint32_t dwSenderUserID, char *szUser, char *szMsg, uint32_t dwTime);
 
   private:
 

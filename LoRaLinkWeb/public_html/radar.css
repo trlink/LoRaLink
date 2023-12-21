@@ -57,20 +57,26 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/css.css to edit this t
 
 
 .dotBoxGreen {
+    position: absolute;
+    left: calc(var(--x) * 100%);
+    top: calc(var(--y) * 100%);
     border: 1px solid #cf5;
     color: #cf5;
     opacity: 1;
     width: 50px;
-    height: 14px;
     font-size: 13px;
     overflow: hidden;
+    margin-top: 10px;
+    margin-left: 5px;
 };
 
 .dotBoxGreen span {
     margin-left: 3px;
     margin-right: 3px;
+    margin-top: -3px;
     font-size: 13px;
     overflow: hidden;
+    margin-left: 3px;
 }
 
 .dotRed {

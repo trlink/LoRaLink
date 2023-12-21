@@ -14,7 +14,7 @@
 
 
 
-int LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocolType, uint32_t dwSenderDevice, uint32_t dwSenderUserID)
+int LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocolType, uint32_t dwSenderUserID)
 {
   //variables
   ///////////
@@ -22,7 +22,6 @@ int LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocol
 
   pResult[nPos++] = nProtocolType;
 
-  nPos            += WriteDWORD(pResult + nPos, dwSenderDevice);
   nPos            += WriteDWORD(pResult + nPos, dwSenderUserID);
 
   pResult[nPos++] = (byte)nPayloadLen & 0xFF;
@@ -38,7 +37,7 @@ int LLPROTO_Create(byte *pResult, byte *pPayload, int nPayloadLen, int nProtocol
 
 
 
-bool LLPROTO_Decode(byte *pData, int nDataLen, byte *pPayload, int *pnPayloadLen, int *pnProtocolType, uint32_t *pdwSenderDevice, uint32_t *pdwSenderUserID)
+bool LLPROTO_Decode(byte *pData, int nDataLen, byte *pPayload, int *pnPayloadLen, int *pnProtocolType, uint32_t *pdwSenderUserID)
 {
   //variables
   ///////////
@@ -47,10 +46,7 @@ bool LLPROTO_Decode(byte *pData, int nDataLen, byte *pPayload, int *pnPayloadLen
   if(nDataLen >= LLProtoMinHeaderLength)
   {
     *pnProtocolType                   = pData[nPos++];
-    
-    *pdwSenderDevice                  = ReadDWORD(pData + nPos);
-    nPos += sizeof(uint32_t);
-    
+        
     *pdwSenderUserID                  = ReadDWORD(pData + nPos);
     nPos += sizeof(uint32_t);
     
@@ -598,14 +594,13 @@ CLoRaLinkProtocol::~CLoRaLinkProtocol()
 
 
 
-bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
+bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(_sSkyNetProtocolMessage *pProtocolMsg, byte *pData, int nLength)
 {
   //variables
   ///////////
   byte      *pPayload       = new byte[nLength + 1];
   int       nPayloadLen     = 0;
   int       nProtocolType   = 0;
-  uint32_t  dwSenderDevice  = 0;
   uint32_t  dwSenderUserID  = 0;
   bool      bResult         = false;
   
@@ -615,13 +610,13 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
     Serial.println(nLength);
   #endif
   
-  if(LLPROTO_Decode(pData, nLength, pPayload, (int*)&nPayloadLen, (int*)&nProtocolType, (uint32_t*)&dwSenderDevice, (uint32_t*)&dwSenderUserID) == true)
+  if(LLPROTO_Decode(pData, nLength, pPayload, (int*)&nPayloadLen, (int*)&nProtocolType, (uint32_t*)&dwSenderUserID) == true)
   {
     #if CLRP_DEBUG == 1
       Serial.print(F("[CLRLP] received Data from: "));
       Serial.print(dwSenderUserID);
       Serial.print(F("@"));
-      Serial.print(dwSenderDevice); 
+      Serial.print(pProtocolMsg->nOriginID); 
       Serial.print(F(" proto type: "));
       Serial.println(nProtocolType); 
     #endif
@@ -654,7 +649,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
           {
             #if CLRP_DEBUG == 1
               Serial.print(F("[CLRLP] POSITION_IND: from dev: "));
-              Serial.print(dwSenderDevice);
+              Serial.print(pProtocolMsg->nOriginID);
               Serial.print(F(" type: "));
               Serial.println(nPosType);            
             #endif                    
@@ -668,7 +663,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
               fCourse2 = TinyGPS::course_to(LLSystemState.fLatitude, LLSystemState.fLongitude, fLatitude, fLongitude);
             };
   
-            sprintf_P(szData, PSTR("{\"Sender\": %lu, \"Course\": %f, \"Speed\": %f, \"HDOP\": %i, \"Sat\": %i, \"Age\": %lu, \"Lat\": %f, \"Lon\": %f, \"Alt\": %f, \"Valid\": %i, \"Type\": %i, \"Dst\": %f, \"Course2\": %f}"), dwSenderDevice, fCourse, fSpeed, nHDOP, nNumSat, dwLastValid, fLatitude, fLongitude, fAltitude, bValidSignal, nPosType, fDst, fCourse2);  
+            sprintf_P(szData, PSTR("{\"Sender\": %lu, \"Course\": %f, \"Speed\": %f, \"HDOP\": %i, \"Sat\": %i, \"Age\": %lu, \"Lat\": %f, \"Lon\": %f, \"Alt\": %f, \"Valid\": %i, \"Type\": %i, \"Dst\": %f, \"Course2\": %f}"), pProtocolMsg->nOriginID, fCourse, fSpeed, nHDOP, nNumSat, dwLastValid, fLatitude, fLongitude, fAltitude, bValidSignal, nPosType, fDst, fCourse2);  
   
             #if CLRP_DEBUG == 1
               Serial.println(szData);
@@ -681,7 +676,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
             //update position in node table
             if(bValidSignal == true)
             {
-              if(FindDeviceByNodeID(pRS, dwSenderDevice) == true)
+              if(FindDeviceByNodeID(pRS, pProtocolMsg->nOriginID) == true)
               {
                 pRS->setData(3, (void*)&fLatitude, sizeof(fLatitude));
                 pRS->setData(4, (void*)&fLongitude, sizeof(fLongitude));
@@ -715,7 +710,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
         {
           #if CLRP_DEBUG == 1
             Serial.print(F("[CLRLP] SHOUTOUT_IND: from dev: "));
-            Serial.print(dwSenderDevice);
+            Serial.print(pProtocolMsg->nOriginID);
             Serial.print(F(" User: "));
             Serial.print(szUser);
             Serial.print(F(" Msg: "));
@@ -748,13 +743,13 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
 
           if(bFound == false)
           {
-            nSuccess   = (this->enqueueShoutOut(dwSenderDevice, (char*)&szUser, szMsg, dwTime) == true ? 1 : 0);
+            nSuccess   = (this->enqueueShoutOut(pProtocolMsg->nOriginID, dwSenderUserID, (char*)&szUser, szMsg, dwTime) == true ? 1 : 0);
             
             pInsert[0] = (void*)&szUser;
             pInsert[1] = (void*)&dwTime;
             pInsert[2] = (void*)szMsg;
             pInsert[3] = (void*)&nSuccess;
-            pInsert[4] = (void*)&dwSenderDevice;
+            pInsert[4] = (void*)&pProtocolMsg->nOriginID;
 
             g_pShoutOutTable->insertData(pInsert);
 
@@ -793,7 +788,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
         {
           #if CLRP_DEBUG == 1
             Serial.print(F("[CLRLP] DATA_REQ: from dev: "));
-            Serial.print(dwSenderDevice);
+            Serial.print(pProtocolMsg->nOriginID);
             Serial.print(F(" file: "));
             Serial.print(dwLocalFileID);
             Serial.print(F(" remote file: "));
@@ -828,8 +823,8 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
           };
 
           //answer
-          nSuccess          = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_RESP, DeviceConfig.dwDeviceID, dwSenderUserID);
-          bResult           = this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nSuccess);
+          nSuccess          = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_RESP, dwSenderUserID);
+          bResult           = this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nSuccess);
         }
         else
         {
@@ -869,7 +864,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
         {
           #if CLRP_DEBUG == 1
             Serial.print(F("[CLRLP] DATA_RESP: from dev: "));
-            Serial.print(dwSenderDevice);
+            Serial.print(pProtocolMsg->nOriginID);
             Serial.print(F(" file: "));
             Serial.print(dwLocalFileID);
             Serial.print(F(" remote file: "));
@@ -951,7 +946,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
         {
           #if CLRP_DEBUG == 1
             Serial.print(F("[CLRLP] DATA_COMPLETE_IND: from dev: "));
-            Serial.print(dwSenderDevice);
+            Serial.print(pProtocolMsg->nOriginID);
             Serial.print(F(" file: "));
             Serial.print(dwLocalFileID);
             Serial.print(F(" remote file: "));
@@ -1008,9 +1003,9 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
           };
 
           nPayloadLenAnswer       = LLPROTO_CreateDataComplete(pDataAnswerPayload, dwLocalFileID, dwRemoteFileID, dwRemoteTaskID);
-          nRes                    = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_COMPLETE_CONF, DeviceConfig.dwDeviceID, dwSenderUserID);
+          nRes                    = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_COMPLETE_CONF, dwSenderUserID);
     
-          this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nRes);
+          this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nRes);
 
           removeDataTransferTablesHeader(dwRemoteFileID);
         };
@@ -1046,7 +1041,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
         {
           #if CLRP_DEBUG == 1
             Serial.print(F("[CLRLP] DATA_COMPLETE_CONF: from dev: "));
-            Serial.print(dwSenderDevice);
+            Serial.print(pProtocolMsg->nOriginID);
             Serial.print(F(" file: "));
             Serial.print(dwLocalFileID);
             Serial.print(F(" remote file: "));
@@ -1113,12 +1108,12 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
           {
             dwLocalUserID = GetUserIdByName(szFilename);
 
-            if(isContactBlocked(dwLocalUserID, dwSenderUserID, dwSenderDevice) == false)
+            if(isContactBlocked(dwLocalUserID, dwSenderUserID, pProtocolMsg->nOriginID) == false)
             {
               //write header to db, request file
               if(g_pDataHeaderTable->isOpen() == true)
               {
-                dwDataHeadID = getDataHeadIdBySourceAndFileId(g_pDataHeaderTable, dwSenderDevice, dwRemoteFileID);
+                dwDataHeadID = getDataHeadIdBySourceAndFileId(g_pDataHeaderTable, pProtocolMsg->nOriginID, dwRemoteFileID);
               
                 if(dwDataHeadID == 0)
                 {
@@ -1126,8 +1121,8 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
                   pInsert[1] = (void*)&szSender;
                   pInsert[2] = (void*)&dwTime;
                   pInsert[3] = (void*)&dwFileSize;
-                  pInsert[4] = (void*)&dwSenderDevice;
-                  pInsert[5] = (void*)&dwSenderDevice;
+                  pInsert[4] = (void*)&pProtocolMsg->nOriginID;
+                  pInsert[5] = (void*)&pProtocolMsg->nOriginID;
                   pInsert[6] = (void*)&dwTime;
                   pInsert[7] = (void*)&nDataType;
                   pInsert[8] = (void*)&nFileComplete;
@@ -1189,8 +1184,8 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
               
                     //answer
                     nPayloadLenAnswer = LLPROTO_CreateDataHeaderResp(pDataAnswerPayload, dwDataHeadID, dwRemoteFileID, dwRemoteTask, 0);
-                    nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, DeviceConfig.dwDeviceID, dwSenderUserID);
-                    bResult           = this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nPos);
+                    nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, dwSenderUserID);
+                    bResult           = this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nPos);
           
     
                     //create transfer complete task
@@ -1227,8 +1222,8 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
                   
                   //answer
                   nPayloadLenAnswer = LLPROTO_CreateDataHeaderResp(pDataAnswerPayload, dwDataHeadID, dwRemoteFileID, dwRemoteTask, 0);
-                  nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, DeviceConfig.dwDeviceID, dwSenderUserID);
-                  bResult           = this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nPos);
+                  nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, dwSenderUserID);
+                  bResult           = this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nPos);
                 };
               }
               else
@@ -1248,8 +1243,8 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
               
               //answer (reject file!)
               nPayloadLenAnswer = LLPROTO_CreateDataHeaderResp(pDataAnswerPayload, dwDataHeadID, dwRemoteFileID, dwRemoteTask, 1);
-              nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, DeviceConfig.dwDeviceID, dwSenderUserID);
-              bResult           = this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nPos);
+              nPos              = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_DATA_HEADER_RESP, dwSenderUserID);
+              bResult           = this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nPos);
             };
           }
           else
@@ -1364,7 +1359,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
             Serial.print(F(" from "));
             Serial.print(dwSenderUserID);
             Serial.print(F("@"));
-            Serial.println(dwSenderDevice); 
+            Serial.println(pProtocolMsg->nOriginID); 
           #endif
         
           if(FindUserByName(&rs, szUser) == true)
@@ -1374,9 +1369,9 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(byte *pData, int nLength)
           };
     
           nPayloadLenAnswer       = LLPROTO_CreateQueryUserResp(pDataAnswerPayload, dwRespID, dwContactID, dwTaskID, nRes);
-          nRes                    = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_USERQ_RESP, DeviceConfig.dwDeviceID, dwSenderUserID);
+          nRes                    = LLPROTO_Create(pDataAnswer, pDataAnswerPayload, nPayloadLenAnswer, LORA_PROTO_TYPE_USERQ_RESP, dwSenderUserID);
     
-          bResult                 = this->enqueueLoRaLinkMessage(dwSenderDevice, pDataAnswer, nRes);
+          bResult                 = this->enqueueLoRaLinkMessage(pProtocolMsg->nOriginID, pDataAnswer, nRes);
         };
         
         delete pDataAnswerPayload;
@@ -1532,7 +1527,7 @@ bool CLoRaLinkProtocol::addShoutOut(uint32_t dwSenderNodeID, uint32_t dwUserID, 
     Serial.println(szUser);
   #endif
 
-  bSend = this->enqueueShoutOut(dwSenderNodeID, szUser, szMsg, dwTime);
+  bSend = this->enqueueShoutOut(dwSenderNodeID, dwUserID, szUser, szMsg, dwTime);
 
   //the message will be retransmitted
   //later if not forwared to at least 1 node
@@ -1569,7 +1564,7 @@ bool CLoRaLinkProtocol::addShoutOut(uint32_t dwSenderNodeID, uint32_t dwUserID, 
     
   
     nPayloadLen       = LLPROTO_CreateUserLocateReq(pPayload, dwUntil, dwRemoteUsrID);
-    nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USER_LOCATE_REQ, DeviceConfig.dwDeviceID, dwLocalUserID);
+    nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USER_LOCATE_REQ, dwLocalUserID);
   
     nPayloadLen       = DATA_IND(pPayload, dwMsgID, DeviceConfig.dwDeviceID, dwRemoteDevID, DeviceConfig.dwDeviceID, 0, pDataAnswer, nSuccess);
     
@@ -1598,7 +1593,7 @@ bool CLoRaLinkProtocol::addShoutOut(uint32_t dwSenderNodeID, uint32_t dwUserID, 
     
   
     nPayloadLen       = LLPROTO_CreateUserPositionInd(pPayload, LLSystemState.fCourse, LLSystemState.fSpeed, LLSystemState.nHDOP, LLSystemState.nNumSat, (LLSystemState.dwLastValid > 0 ? (millis() - LLSystemState.dwLastValid) / 1000 : 0), LLSystemState.fLatitude, LLSystemState.fLongitude, LLSystemState.fAltitude, LLSystemState.bValidSignal, nPositionType);
-    nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USER_POSITION_IND, DeviceConfig.dwDeviceID, dwLocalUserID);
+    nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USER_POSITION_IND, dwLocalUserID);
   
   
     nPayloadLen       = DATA_IND(pPayload, dwMsgID, DeviceConfig.dwDeviceID, dwRemoteDevID, DeviceConfig.dwDeviceID, 0, pDataAnswer, nSuccess);
@@ -1617,7 +1612,10 @@ bool CLoRaLinkProtocol::addShoutOut(uint32_t dwSenderNodeID, uint32_t dwUserID, 
 
 #endif
 
-bool CLoRaLinkProtocol::enqueueShoutOut(uint32_t dwSenderNodeID, char *szUser, char *szMsg, uint32_t dwTime)
+
+
+
+bool CLoRaLinkProtocol::enqueueShoutOut(uint32_t dwSenderNodeID, uint32_t dwSenderUserID, char *szUser, char *szMsg, uint32_t dwTime)
 {
   //variables
   ///////////
@@ -1630,7 +1628,7 @@ bool CLoRaLinkProtocol::enqueueShoutOut(uint32_t dwSenderNodeID, char *szUser, c
   _sSkyNetRoutingEntry  *routing; 
   
   nPayloadLen       = LLPROTO_CreateShoutOutInfo(pPayload, szUser, dwTime, szMsg);
-  nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_SHOUTOUT_IND, DeviceConfig.dwDeviceID, 0);
+  nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_SHOUTOUT_IND, dwSenderUserID);
 
   if(g_pRoutingEntries->getItemCount() > 0)
   {
@@ -2252,7 +2250,7 @@ bool CLoRaLinkProtocol::enqueueRequestFileData(uint32_t dwReceiverDeviceID, uint
   #endif
 
   nPayloadLen   = LLPROTO_CreateDataReq(pPayload, dwLocalFileID, dwRemoteFileID, dwRemoteTaskID, nBlockNumber);
-  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_REQ, DeviceConfig.dwDeviceID, dwLocalUserID);
+  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_REQ, dwLocalUserID);
   
   bResult       = this->enqueueLoRaLinkMessage(dwReceiverDeviceID, pDataAnswer, nLen);
 
@@ -2286,7 +2284,7 @@ bool CLoRaLinkProtocol::enqueueFileComplete(uint32_t dwReceiverDeviceID, uint32_
   #endif
 
   nPayloadLen   = LLPROTO_CreateDataComplete(pPayload, dwLocalFileID, dwRemoteFileID, dwRemoteTaskID);
-  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_COMPLETE_IND, DeviceConfig.dwDeviceID, 0);
+  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_COMPLETE_IND, 0);
   
   bResult       = this->enqueueLoRaLinkMessage(dwReceiverDeviceID, pDataAnswer, nLen);
 
@@ -2316,7 +2314,7 @@ bool CLoRaLinkProtocol::enqueueFileTransfer(uint32_t dwReceiverDeviceID, uint32_
   #endif
 
   nPayloadLen   = LLPROTO_CreateDataHeaderIndication(pPayload, szFilename, dwLocalFileID, szSender, dwSize, nDataType, nBlockSize, dwTaskID);
-  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_HEADER, DeviceConfig.dwDeviceID, dwLocalUserID);
+  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_DATA_HEADER, dwLocalUserID);
   
   bResult       = this->enqueueLoRaLinkMessage(dwReceiverDeviceID, pDataAnswer, nLen);
 
@@ -2345,7 +2343,7 @@ bool CLoRaLinkProtocol::enqueueUserQuery(char *szUser, uint32_t dwDeviceID, uint
   #endif
 
   nPayloadLen   = LLPROTO_CreateQueryUser(pPayload, szUser, dwDeviceID, dwContactID, dwTaskID);
-  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USERQ_REQ, DeviceConfig.dwDeviceID, dwLocalUserID);
+  nLen          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USERQ_REQ, dwLocalUserID);
 
   #if CLRP_DEBUG == 1
     Serial.print(F("[CLRLP] Send UserQuery to "));

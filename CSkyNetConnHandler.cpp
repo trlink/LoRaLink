@@ -527,10 +527,16 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
   
               if((msg.nReceiverID == DeviceConfig.dwDeviceID) || (msg.nReceiverID == 0))
               {
-                nAnswerLen = DATA_CONF(pAnswer, msg.dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, msg.nSenderID, SKYNET_RESPONSE_OK);
-                ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
-  
-                ((CSkyNetConnection*)this->m_pSkyNetConnection)->onLoRaLinkProtocolData(msg.pData, msg.nDataLen);
+                //don't answor messages, which are send to everyone
+                //(position_ind), the sending dev doesn't expect them, or a response is
+                //send by LoRaLink-Protocol itself...
+                if(msg.nReceiverID != 0)
+                {
+                  nAnswerLen = DATA_CONF(pAnswer, msg.dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, msg.nSenderID, SKYNET_RESPONSE_OK);
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+                };
+                
+                ((CSkyNetConnection*)this->m_pSkyNetConnection)->onLoRaLinkProtocolData((void*)&msg, msg.pData, msg.nDataLen);
               }
               else if(msg.nViaID == DeviceConfig.dwDeviceID)
               {
@@ -738,29 +744,33 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                 //if the device is working as a bridge (has IP connections
                 //we need to forward the HELLO, so that the rest of the
                 //network is aware of that node...
-                if((msg.nReceiverID == 0) && (this->getConnectionType() == SKYNET_CONN_TYPE_LORA))
-                {
-                  #if SKYNET_CONN_INFO == 1
-                    Serial.println(F("[CHandler] fwd HELLO_IND from LORA -> IP "));
-                  #endif
-                  
-                  nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nOriginID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
-
-                  //forward to IP nodes
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
-                };
-
+                #if LORALINK_HARDWARE_LORA == 1
+                  if((msg.nReceiverID == 0) && (this->getConnectionType() == SKYNET_CONN_TYPE_LORA))
+                  {
+                    #if SKYNET_CONN_INFO == 1
+                      Serial.println(F("[CHandler] fwd HELLO_IND from LORA -> IP "));
+                    #endif
+                    
+                    nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
+  
+                    //forward to IP nodes
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
+                  };
+                #endif
+                
                 if((msg.nReceiverID == 0) && (((this->getConnectionType() == SKYNET_CONN_TYPE_IP_CLIENT) || (this->getConnectionType() == SKYNET_CONN_TYPE_IP_SERVER))))
                 {
                   #if SKYNET_CONN_INFO == 1
                     Serial.println(F("[CHandler] fwd HELLO_IND from IP -> LORA, IP -> other IP"));
                   #endif
                   
-                  nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nOriginID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
+                  nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
 
                   //forward to LORA nodes
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_LORA, this->getTaskID());
+                  #if LORALINK_HARDWARE_LORA == 1
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_LORA, this->getTaskID());
+                  #endif
 
                   //forward to other IP Nodes
                   ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());

@@ -5,6 +5,7 @@ var g_strServer       = "/";
 var g_nLoadPos = 0;
 var MAX_MESSAGE_CHARS = 1500;
 var g_aKnownNodes     = [];
+var g_aRoutes         = {};
 var g_aChats          = [];
 var g_aContacts       = [];
 var g_aChatMsgs       = [];
@@ -187,7 +188,10 @@ function readWebEvents() {
                 
                 //does the connected dev has a valid GPS signal?
                 if(msg["bValidSignal"] === true) {
-                    $("#imgGpsState").attr("src", "validGPS.png");
+                    
+                    if(g_bGpsValid === false) {
+                        $("#imgGpsState").attr("src", "validGPS.png");
+                    };
 
                     //set course and enable direction 
                     //arrow
@@ -202,7 +206,9 @@ function readWebEvents() {
                 else {
                     g_pRadar.disableCourse(true);
 
-                    $("#imgGpsState").attr("src", "invalidGPS.png");
+                    if(g_bGpsValid === true) {
+                        $("#imgGpsState").attr("src", "invalidGPS.png");
+                    };
                 };
 
                 g_bGpsValid = msg["bValidSignal"];
@@ -713,7 +719,7 @@ function loadChatsFromDevice(bUpdateOnly) {
             };
             
             if(bUpdateOnly === false) {
-                loadKnownDevices();
+                loadKnownDevices(false);
             };
         },
         error: function (msg) {
@@ -729,7 +735,7 @@ function loadChatsFromDevice(bUpdateOnly) {
 };
 
 
-function loadKnownDevices() {
+function loadKnownDevices(bUpdateOnly) {
     
     $("#lblDesc").text("Load existing nodes...");
     
@@ -754,13 +760,17 @@ function loadKnownDevices() {
 
             g_aKnownNodes = msg["Nodes"];
             
-            loadFinished();
+            if(bUpdateOnly == false) {
+                loadFinished();
+            };
         },
         error: function (msg) {
 
             console.log(JSON.stringify(msg));
 
-            loadFinished();
+            if(bUpdateOnly == false) {
+                loadFinished();
+            };
         }
     });
 }
@@ -1470,9 +1480,47 @@ function disableGpsTracking() {
 }
 
 
+function getRouting() {
+    
+    $("#lblDesc").text("Get routing...");
+    
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        crossDomain: true,
+        data: '{"command": "getRoutes"}',
+        contentType: 'application/json; charset=utf-8',
+        dataType: 'json',
+        async: true,
+        success: function(msg) {
+            
+            g_aRoutes = {};
+            
+            for(var i = 0; i < msg["Routes"].length; ++i) {
+                var oRoute = {};
+                
+                oRoute.DeviceID = parseInt(msg["Routes"][i][0]);
+                oRoute.ViaNodeID = parseInt(msg["Routes"][i][1]);
+                oRoute.ConnType = parseInt(msg["Routes"][i][2]);
+                
+                g_aRoutes.push({key: oRoute.DeviceID, value: oRoute});
+            }
+        },
+        error: function (msg) {
+            console.log(JSON.stringify(msg));
+
+            $("#lblDesc").text("Failed to load routes...");
+        }
+    });
+};
+
+
 
 function showRadar() {
-    //$("#divRadar").show();
+    
+    loadKnownDevices(true);
+    getRouting();
+    
     $("#dlgRadar").modal("show");
     $("#lblRadarRange").text(Math.round(g_pRadar.getRadius() / 2));
 };
@@ -1594,11 +1642,21 @@ function CRadar(elRadar) {
 
             strHTML = "<a id='point_" + gps.Sender + "' onclick=\"javascript: radarItemClicked('" + 
                     gps.Sender + "');\"><div class='" + (gps.Type === 0 ? "dotGreen" : "dotRed") + "' style='--x:" + x + 
-                    "; --y:" + y + "'></div><div id='info_point_" + gps.Sender + "' class='dotBoxGreen' style='position: absolute;'><span>" + 
+                    "; --y:" + y + ";'></div><div id='info_point_" + gps.Sender + "' class='dotBoxGreen' style='position: absolute; --x:" + x + 
+                    "; --y:" + y + ";'><span>" + 
                     gps.Sender + "</span></div></a>";
 
             elRadar.innerHTML += strHTML;
         };
+    };
+
+
+    CRadar.prototype.getPoint = function(pointID) {
+        if(pointID in m_aPoints) {
+            return m_aPoints[pointID];
+        };
+        
+        return null;
     };
 
 
@@ -1679,12 +1737,6 @@ function CRadar(elRadar) {
             const dotAngle = mod(Math.atan2(y, x), TAU);
             const opacity = mod(dotAngle - beamAngle, TAU) / TAU;
             elDot.style.opacity = opacity;
-
-            var rect = elDot.getBoundingClientRect();
-            var infoDiv = document.getElementById("info_" + elDot.parentElement.id);
-
-            infoDiv.style.top = (rect.top + 2) + 'px';
-            infoDiv.style.left = (rect.left - 8) + 'px';
         });
 
         requestAnimationFrame(update);
