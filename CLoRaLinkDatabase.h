@@ -89,6 +89,7 @@ const int nSchedulerTableDef[] =
 #define DATAHEADERTABLE_SIZE      16
 #define DATATABLE_DATATYPE_MSG    1
 #define DATATABLE_DATATYPE_SHOUT  2
+#define DATATABLE_DATATYPE_FILE   3
 #define DATATABLE_DATADIR_OUT     1
 #define DATATABLE_DATADIR_IN      2
 

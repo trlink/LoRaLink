@@ -163,6 +163,11 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     
             if(readLength > 0)
             {
+              #ifdef WEBSERVERDEBUG
+                // We log all three values, so that you can observe the upload on the serial monitor:
+                Serial.printf("handleFormUpload: filename='%s', write %i bytes\n", filename.c_str(), readLength);
+              #endif
+              
               file.write(buf, readLength);
             };
           };
@@ -329,14 +334,24 @@ void sendJsonResponse(HTTPResponse *res, int nResult, DynamicJsonDocument &pJson
 {
   //variables
   ///////////
-  String strJson = "";
+  char *szJson = new char[pJsonResponse.capacity() + 1];
 
   // Write JSON document
-  serializeJsonPretty(pJsonResponse, strJson);
+  memset(szJson, 0, pJsonResponse.capacity());
+  serializeJson(pJsonResponse, szJson, pJsonResponse.capacity());
+
+  #ifdef WEBSERVERDEBUG
+    Serial.print(F("sendJsonResponse: size: "));
+    Serial.print(pJsonResponse.capacity());
+    Serial.print(F(" response: "));
+    Serial.println(szJson);
+  #endif
   
   res->setStatusCode(nResult);
   res->setHeader("Content-Type", "application/json");
-  res->print((char*)strJson.c_str());
+  res->print(szJson);
+
+  delete szJson;
 };
 
 

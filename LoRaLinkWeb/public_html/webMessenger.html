@@ -13,6 +13,8 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
         <link rel="stylesheet" type="text/css" href="./bootstrap.min.css">
         <link rel="stylesheet" type="text/css" href="./bootstrap-select.min.css">
         <link href="radar.css" rel="stylesheet" type="text/css"/>
+        <link href="leaflet.css" rel="stylesheet" type="text/css"/>
+        <link href="map.css" rel="stylesheet" type="text/css"/>
         
         <script src="/jquery-3.7.0.min.js"></script>
         <script src="/bootstrap.bundle.min.js"></script>
@@ -20,14 +22,15 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
         <script src="/popper.js"></script>
         <script src="/crypto-js_4.1.1_core.min.js"></script>
         <script src="/crypto-js_4.1.1_md5.js"></script>
-        
-        <script src="./webMessenger.js"></script>
+        <script src="/leaflet-src.js"></script>
+        <script src="/webMessenger.js"></script>
     </head>
     <body id="body" onresize="javascript: resizeWindow();">
         <input type="hidden" id="hfPwdHash" name="hfUserPwdHash" value="">
         <input type="hidden" id="hfUser" name="hfUser" value="">
         <input type="hidden" id="hfUserID" name="hfUserID" value="">
         <input type="hidden" id="hfSelectedChatID" name="hfSelectedChatID" value="">
+        <input type="hidden" id="hfNodeName" name="hfNodeName" value="">
         
         
         <nav id="navMainMenu" class="navbar navbar-fixed-top navbar-dark bg-primary navbar-expand-lg">
@@ -36,8 +39,15 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
             </button>
             <div class="collapse navbar-collapse" id="navbarTogglerDemo01">
                 <a class="navbar-brand" href="#">
-                    <img src="./LoRaBlack.png" width="30" height="30" alt="logo">
-                    LoRa-Link
+                    <div class="row">
+                        <div class="col">
+                            <img src="./LoRaBlack.png" width="30" height="30" alt="logo" style="margin-top: 10px;">
+                        </div>
+                        <div class="col">
+                            <div class="row">LoRa-Link</div>
+                            <div class="row"><span id="lblNodeNme"></span></div>
+                        </div>
+                    </div>
                 </a>
                 <ul class="navbar-nav mr-auto">
                     <li class="nav-item dropdown">
@@ -45,7 +55,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                           New
                         </a>
                         <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showNewChatDialog();">Chat</a>
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showNewChatDialog('');">Chat</a>
                         </div>
                     </li>  
                     <li class="nav-item">
@@ -60,6 +70,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(1);">Enable - Emergency</a>
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); disableGpsTracking();">Disable</a> 
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showRadar();">Show Radar</a> 
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView();">Show Map</a> 
                         </div>
                     </li>
                 </ul>
@@ -145,7 +156,10 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
             </div>
             
             <div id="divMainRightPane">
-                <table id="tbShoutOut" style="display: none; width: 100%;">
+                <div id="divMapContainer" style="display: none; width: 100%; z-index: 100;">
+                </div>
+                
+                <table id="tbShoutOut" style="display: none; width: 100%; z-index: 99;">
                     <thead style="height: 65px;" class="msgHeaderRow">
                         <tr>
                             <td colspan="3">
@@ -187,7 +201,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                     </tfoot>
                 </table>
                 
-                <table id="tbChatMsgs" style="display: none; width: 100%;">
+                <table id="tbChatMsgs" style="display: none; width: 100%; z-index: 99;">
                     <thead style="height: 125px;" class="msgHeaderRow">
                         <tr>
                             <td>
@@ -317,5 +331,9 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                 </div>
             </div>
         </div>
+        
+        <form id="frmFileUpload" enctype="multipart/form-data" method="post" style="display: none;">
+            <input type="file" name="file" id="file">
+        </form>
     </body>
 </html>

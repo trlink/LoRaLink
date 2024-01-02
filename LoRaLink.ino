@@ -83,14 +83,22 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
 
 #ifdef LORALINK_HARDWARE_TBEAM
-  AXP20X_Class         *g_pAxp            = new AXP20X_Class(); 
+  AXP20X_Class         *g_pAxp                  = new AXP20X_Class(); 
 #endif
 
 
 #if LORALINK_HARDWARE_GPS == 1
+  //variables
+  ///////////
   TinyGPS              *g_pGPS                    = NULL;
   bool                  g_bLocationTrackingActive = false;
   int                   g_nLocationTrackingType   = GPS_POSITION_TYPE_NORMAL;
+  TaskHandle_t          g_Core0TaskHandle3;
+  bool                  g_bHaveData               = false;
+
+  //function predecl
+  //////////////////
+  void GpsDataTask(void *pParam);
 #endif
 
 
@@ -123,21 +131,24 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   //variables
   ///////////
   DNSServer               g_dnsServer;
-  CTCPServer             *g_pTCPServer      = NULL;
-  int                     g_nWiFiConnects   = 0;
-  CWSFLinkedList         *g_pMessages       = new CWSFLinkedList();
+  CTCPServer             *g_pTCPServer          = NULL;
+  int                     g_nWiFiConnects       = 0;
+  CWSFLinkedList         *g_pMessages           = new CWSFLinkedList();
   long                    g_lReconnectToServerTimeout;
   bool                    g_bReconnectToServer;
-  CWebEvent              *g_pWebEvent       = new CWebEvent();
-  int                     g_nShoutoutCount  = 0;
-  int                     g_nWebserverCheck = 0;
+  CWebEvent              *g_pWebEvent           = new CWebEvent();
+  int                     g_nShoutoutCount      = 0;
+  int                     g_nWebserverCheck     = 0;
+  long                    g_lWiFiShutdownTimer  = 0;
 
   //function predecl
   //////////////////
   void ConnectToLoraLinkServer();
+  void HandleLoRaLinkReconnect();
   void EnableWiFi();
 
 
+  //this function will enable and setup WiFi
   void EnableWiFi()
   {
     //variables
@@ -201,7 +212,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     };
   };
   
-
+  /**
+   * this task handles the webserver connections and process dns requests
+   */
   void WebServerTask(void *pParam)
   {
     #ifdef WEBAPIDEBUG
@@ -219,19 +232,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
         EasyDDNS.update(120000);
       };
 
-      //handle connect to lora link server
-      //the re-connect will only be done every 5 sec
-      if(g_bReconnectToServer == true)
-      {
-        if(millis() > g_lReconnectToServerTimeout)
-        {
-          g_bReconnectToServer        = false;
-          g_lReconnectToServerTimeout = 0;
-        
-          ConnectToLoraLinkServer();
-        };
-      };
-      
       HandleWebserver();
 
       delay(1);
@@ -241,6 +241,22 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   };
 
 
+  //handle connect to lora link server
+  //the re-connect will only be done every 5 sec
+  void HandleLoRaLinkReconnect()
+  {
+    if(g_bReconnectToServer == true)
+    {
+      if(millis() > g_lReconnectToServerTimeout)
+      {
+        g_bReconnectToServer        = false;
+        g_lReconnectToServerTimeout = 0;
+      
+        ConnectToLoraLinkServer();
+      };
+    };
+  };
+  
 
   void ConnectToLoraLinkServer()
   {
@@ -735,6 +751,73 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       };
 
       bHandled = true;
+    };
+
+
+    if(strcmp_P(doc[F("command")], PSTR("GetWiFi")) == 0)
+    {
+      //variables
+      ///////////
+      JsonObject            root        = docResp.to<JsonObject>();
+      JsonArray             networks    = root.createNestedArray("networks");
+
+      for (int n = 0; n < LoRaWiFiCfg.nAvailNetworks; ++n) 
+      {
+        if(LoRaWiFiCfg.szNetwork[n] != NULL)
+        {
+          networks.add(LoRaWiFiCfg.szNetwork[n]);
+        };
+      };
+
+      docResp["response"] = String(F("OK"));
+      
+      PrepareSerializeWiFiConfig(docResp, &LoRaWiFiCfg);
+
+      nRespCode = 200;
+      bHandled = true;
+    };
+
+
+    
+    if(strcmp_P(doc[F("command")], PSTR("createFolder")) == 0)
+    {
+      //variables
+      ///////////
+      String strFolder = String((const char*)doc[F("Folder")]) + String((const char*)doc[F("NewFolder")]);
+
+      docResp["response"] = String(F("ERR"));
+      nRespCode = 403;
+
+      //folders are only supported on
+      //fatfs (sd cards)
+      #if LORALINK_HARDWARE_SDCARD == 1
+        SD.mkdir(strFolder);
+
+        docResp["response"] = String(F("OK"));
+        nRespCode = 200;
+      #else
+        docResp["response"] = String(F("ERR"));
+        nRespCode = 500;
+      #endif
+
+      bHandled = true;
+    };
+
+
+    //used to check if a specific file exist on the webserver
+    if(strcmp_P(doc[F("command")], PSTR("fileExist")) == 0)
+    {  
+      if(LORALINK_WEBAPP_FS.exists((const char*)doc[F("file")]) == true)
+      {
+        docResp["response"] = String(F("OK"));
+      }
+      else
+      {
+        docResp["response"] = String(F("ERR"));
+      };
+      
+      nRespCode = 200;
+      bHandled  = true;
     };
 
 
@@ -1290,30 +1373,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           };
     
     
-          if(strcmp_P(doc[F("command")], PSTR("GetWiFi")) == 0)
-          {
-            //variables
-            ///////////
-            JsonObject            root        = docResp.to<JsonObject>();
-            JsonArray             networks    = root.createNestedArray("networks");
-      
-            for (int n = 0; n < LoRaWiFiCfg.nAvailNetworks; ++n) 
-            {
-              if(LoRaWiFiCfg.szNetwork[n] != NULL)
-              {
-                networks.add(LoRaWiFiCfg.szNetwork[n]);
-              };
-            };
-      
-            docResp["response"] = String(F("OK"));
-            
-            PrepareSerializeWiFiConfig(docResp, &LoRaWiFiCfg);
-      
-            nRespCode = 200;
-            bHandled = true;
-          };
-    
-      
+          
           if(strcmp_P(doc[F("command")], PSTR("SetWiFi")) == 0)
           {
             //variables
@@ -1451,17 +1511,17 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           {
             //variables
             ///////////
-            DynamicJsonDocument doc2(sizeof(sDeviceConfig) + 250);
-            char      szOutput[sizeof(sDeviceConfig) + 250];
+            DynamicJsonDocument doc2(sizeof(sDeviceConfig) + 500);
+            char      *szOutput = new char[sizeof(sDeviceConfig) + 500];
             int       nLength;
       
             DeSerializeDeviceConfig(doc);
       
             PrepareSerializeDeviceConfig(doc2);
       
-            nLength = serializeJson(doc2, (char*)&szOutput, sizeof(szOutput));
+            nLength = serializeJson(doc2, szOutput, sizeof(sDeviceConfig) + 500);
       
-            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)&szOutput, nLength) == true)
+            if(WriteFile(LORALINK_CONFIG_FS, CONFIG_FILE_DEVICE, (byte*)szOutput, nLength) == true)
             {
               Serial.println(F("Config written..."));
             };
@@ -1471,35 +1531,11 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
             doc2.clear();
             bHandled = true;
+            delete szOutput;
           };
 
 
-          if(strcmp_P(doc[F("command")], PSTR("createFolder")) == 0)
-          {
-            //variables
-            ///////////
-            String strFolder = String((const char*)doc[F("Folder")]) + String((const char*)doc[F("NewFolder")]);
-            
-            docResp["response"] = String(F("ERR"));
-            nRespCode = 403;
-            
-            #if LORALINK_HARDWARE_SDCARD == 1
-              if(strcmp_P(g_szFileSystem, PSTR("SDCARD")) == 0)
-              {
-                SD.mkdir(strFolder);
-                docResp["response"] = String(F("OK"));
-                nRespCode = 200;
-              }
-              else
-              {
-                docResp["response"] = String(F("ERR"));
-                nRespCode = 403;
-              };
-            #endif
-  
-            bHandled = true;
-          };
-    
+              
           if(strcmp_P(doc[F("command")], PSTR("deleteFile")) == 0)
           {
             docResp["response"] = String(F("ERR"));
@@ -2644,7 +2680,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     {
       #ifdef WEBSERVERDEBUG
         Serial.print(F("Webserver failed to deserialize Data: "));
-        Serial.println(pData);
+        Serial.print(pData);
+        Serial.print(F(" err code: "));
+        Serial.println(err.code());
       #endif
   
       if(request != NULL)
@@ -2680,7 +2718,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           {
             case DATATABLE_DATATYPE_SHOUT:
             {
-              #ifdef TCPAPIDEBUG
+              #ifdef WEBAPIDEBUG
                 Serial.println(F("Add Queued ShoutOut:"));
               #endif
   
@@ -2692,14 +2730,14 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             
             case DATATABLE_DATATYPE_MSG:
             {
-              #ifdef TCPAPIDEBUG
+              #ifdef WEBAPIDEBUG
                 Serial.println(F("Add Queued message:"));
               #endif
              
               //add outgoing message
               if(g_pCLoRaProtocol->addMessage(pNewMsg->dwUserID, pNewMsg->strUser, pNewMsg->strDev, (char*)&pNewMsg->szMsg, pNewMsg->dwRcptDevID, pNewMsg->dwRcptUserID, pNewMsg->dwRcptContactID, CHAT_DIRECTION_OUTGOING) == true)
               {
-                #ifdef TCPAPIDEBUG
+                #ifdef WEBAPIDEBUG
                   Serial.println(F("Chk if local"));
                 #endif
       
@@ -2712,7 +2750,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
                 //to the other user without sending it...
                 if(strcasecmp(pNewMsg->strDev.c_str(), DeviceConfig.szDevName) == 0)
                 {
-                  #ifdef TCPAPIDEBUG
+                  #ifdef WEBAPIDEBUG
                     Serial.println(F("Add incoming msg"));
                   #endif
                   
@@ -2724,33 +2762,33 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
                   {
                     if(pNewMsg->dwRcptUserID > 0)
                     {
-                      #ifdef TCPAPIDEBUG
+                      #ifdef WEBAPIDEBUG
                         Serial.println(F("add local incoming msg"));
                       #endif
                       
                       g_pCLoRaProtocol->addMessage(pNewMsg->dwRcptUserID, pNewMsg->szSender, DeviceConfig.szDevName, (char*)&pNewMsg->szMsg, 0, 0, 0, CHAT_DIRECTION_INCOMING);
 
-                      #ifdef TCPAPIDEBUG
+                      #ifdef WEBAPIDEBUG
                         Serial.println(F("Add web event..."));
                       #endif
                       
                       //add web event for user
                       g_pWebEvent->addEvent(pNewMsg->dwRcptUserID, 1);
 
-                      #ifdef TCPAPIDEBUG
+                      #ifdef WEBAPIDEBUG
                         Serial.println(F("Msg saved..."));
                       #endif
                     }
                     else
                     {
-                      #ifdef TCPAPIDEBUG
+                      #ifdef WEBAPIDEBUG
                         Serial.println(F("Failed to insert incoming msg"));
                       #endif
                     };
                   }
                   else
                   {
-                    #ifdef TCPAPIDEBUG
+                    #ifdef WEBAPIDEBUG
                       Serial.println(F("Failed to get incoming user"));
                     #endif
                   };
@@ -3088,8 +3126,6 @@ void setup()
       g_display.display();
     #endif
 
-    EnableWiFi();
-
     Serial.println(F("Scan for networks:"));
 
     //scan for networks
@@ -3110,6 +3146,10 @@ void setup()
         strcpy(LoRaWiFiCfg.szNetwork[n], WiFi.SSID(n).c_str());
       };
     };
+
+    //enable after scan otherwise wifiscan fails
+    EnableWiFi();
+    
 
     if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
     {
@@ -3296,6 +3336,9 @@ void setup()
     LLSystemState.fAltitude     = 0;
     LLSystemState.dwLastValid   = 0;
 
+    xTaskCreatePinnedToCore(GpsDataTask, "GpsDataTask", 2048, NULL, 1, &g_Core0TaskHandle3, 0);
+    
+
     //check if there is a running tracking
     if(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION) != 0)
     {
@@ -3339,12 +3382,9 @@ void setup()
 
     delete pRecordset;
   };
+
+  g_lWiFiShutdownTimer = millis() + (5 * 60 * 1000);
 };
-
-
-
-
-
 
 
 
@@ -3355,20 +3395,6 @@ void loop()
   ///////////
   long            lCheckTimer = 0;
 
-  #if LORALINK_HARDWARE_GPS == 1
-    //variables
-    ///////////
-    int  year;
-    byte month, day, hour, minute, second, hundredths;
-    unsigned long age;
-    long lDiff;
-    unsigned short  sentences = 0, failed = 0, sentences2 = 0, failed2 = 0;
-    unsigned long   chars = 0, chars2 = 0;
-    float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
-    int nSat, nHDOP;
-    DateTime dtClock;
-  #endif
-  
   esp_task_wdt_init(180, false);
   
   while(true)
@@ -3387,6 +3413,16 @@ void loop()
         EnableWiFi();
       };
     };
+
+    //turn wifi off, 5min after startup, when the 
+    //device is a repeater without login
+    if((DeviceConfig.nDeviceType == DEVICE_TYPE_REPEATER) && (millis() > g_lWiFiShutdownTimer) && (g_lWiFiShutdownTimer != 0))
+    {
+      g_lWiFiShutdownTimer        = 0;
+      LoRaWiFiApCfg.bWiFiEnabled  = false;
+      
+      WiFi.mode(WIFI_OFF);
+    };
     
     LLSystemState.lMemFreeOverall           = esp_get_free_heap_size();
 
@@ -3394,6 +3430,8 @@ void loop()
     //another node...
     g_pDbTaskScheduler->haltScheduler(!LLSystemState.bConnected);
 
+
+    //check free space
     if(lCheckTimer < millis())
     {
       lCheckTimer                           = millis() + 10000;
@@ -3416,123 +3454,7 @@ void loop()
         LLSystemState.lExtSpiBytesAvail     = 0;
       #endif
     };
-  
-    #if LORALINK_HARDWARE_GPS == 1
-      
-      if(g_pGPS != NULL)
-      {
-        if(Serial1.available() > 0)
-        {
-          char c = Serial1.read();
-          
-          #ifdef SERIAL1DEBUG
-            Serial.print(c);
-          #endif
-          
-          g_pGPS->encode(c);
-          
-          ResetWatchDog();
 
-          g_pGPS->stats(&chars2, &sentences2, &failed2);
-
-          if((sentences2 > sentences) || (failed2 > failed))
-          {
-            #ifdef GPSSTATSDEBUG
-              Serial.print(F("[GPS] Chars decoded: "));
-              Serial.print(chars2);
-              Serial.print(F(" sentences: "));
-              Serial.print(sentences2);
-              Serial.print(F(" Failed: "));
-              Serial.println(failed2);           
-            #endif
-
-            sentences = sentences2;
-            failed    = failed2;
-            
-            memset(LLSystemState.szGpsTime, 0, sizeof(LLSystemState.szGpsTime));
-        
-            g_pGPS->crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
-      
-            if(age != TinyGPS::GPS_INVALID_AGE)
-            {
-              LLSystemState.bValidSignal = true;
-              
-              sprintf_P(LLSystemState.szGpsTime, PSTR("%02d:%02d:%02d"), hour, minute, second);
-              
-              
-              dtClock  = DateTime(year, month, day, hour, minute, second);
-
-              fAlt     = g_pGPS->f_altitude();
-              nSat     = g_pGPS->satellites();
-              nHDOP    = g_pGPS->hdop();
-              fSpeed   = g_pGPS->f_speed_kmph();
-              fCourse  = g_pGPS->f_course();
-
-              g_pGPS->f_get_position(&fLat, &fLon, &age);
-              
-              if((nSat == TinyGPS::GPS_INVALID_SATELLITES) || (nSat < 3))
-              {
-                LLSystemState.bValidSignal = false;
-              };
-
-              if(nHDOP == TinyGPS::GPS_INVALID_HDOP)
-              {
-                LLSystemState.bValidSignal = false;
-              };
-              
-              if(fAlt == TinyGPS::GPS_INVALID_ALTITUDE)
-              {
-                LLSystemState.bValidSignal = false;
-              };
-            };
-
-            
-            if(LLSystemState.bValidSignal == false)
-            {
-              memset(LLSystemState.szGpsTime, 0, sizeof(LLSystemState.szGpsTime));
-              strcpy_P(LLSystemState.szGpsTime, PSTR("no fix"));
-            }
-            else
-            {
-              LLSystemState.fAltitude   = fAlt;
-              LLSystemState.nNumSat     = nSat;
-              LLSystemState.fLatitude   = fLat;
-              LLSystemState.fLongitude  = fLon;
-              LLSystemState.dwLastValid = millis();
-              LLSystemState.fSpeed      = fSpeed;
-              LLSystemState.nHDOP       = nHDOP;
-              LLSystemState.fCourse     = fCourse;
-
-              lDiff = dtClock.unixtime() - ClockPtr->getUnixTimestamp();
-
-              if(lDiff < 0) 
-              {
-                lDiff *= -1;
-              };
-
-              #ifdef GPSSTATSDEBUG
-                Serial.print(F("[GPS] difference to loc clock (sec): "));
-                Serial.print(lDiff);
-                Serial.print(F(" Lat: "));
-                Serial.print(fLat);
-                Serial.print(F(" Lon: "));
-                Serial.println(fLon);
-              #endif
-              
-              //update clock if not already done, or time is from a remote or unknown source
-              //of if the difference to GPS is > 10min
-              if(((lDiff / 60) > 10) || (ClockPtr->timeSet() == false) || ((ClockPtr->getUpdateSource() != UPDATE_SOURCE_NTP) && (ClockPtr->getUpdateSource() != UPDATE_SOURCE_EXTERNAL)))
-              {
-                ClockPtr->SetDateTime(year, month, day, hour, minute, UPDATE_SOURCE_EXTERNAL);
-    
-                //update schedules after reboot or initial time change
-                g_pDbTaskScheduler->rescheduleAfterTimechange();
-              };
-            };
-          };
-        };
-      };
-    #endif
   
     //call the task scheduler / handler
     g_pTaskHandler->handleTasks();
@@ -3543,6 +3465,8 @@ void loop()
     #if LORALINK_HARDWARE_WIFI == 1
       //handle the messages received by the webserver
       handleQueuedMessages();
+
+      HandleLoRaLinkReconnect();
     #endif
   };
 };
@@ -3673,6 +3597,151 @@ void ModemDataTask(void *pParam)
 };
 
 
+#if LORALINK_HARDWARE_GPS == 1
+  
+  void GpsDataTask(void *pParam)
+  {
+    //variables
+    ///////////
+    int  year;
+    byte month, day, hour, minute, second, hundredths;
+    char c = 0;
+    unsigned long age;
+    long lDiff;
+    unsigned long chars = 0;
+    float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
+    int nSat, nHDOP;
+    DateTime dtClock;
+
+    
+    while(true)
+    {
+      if(g_pGPS != NULL)
+      {
+        while(Serial1.available() > 0)
+        {
+          chars += 1;
+          c      = Serial1.read();
+          
+          #ifdef SERIAL1DEBUG
+            Serial.print(c);
+          #endif
+          
+          g_pGPS->encode(c);
+        };
+
+        if(chars > 0)
+        {
+          #ifdef GPSSTATSDEBUG
+            Serial.print(F("[GPS] Chars decoded: "));
+            Serial.println(chars);           
+          #endif
+
+          memset(LLSystemState.szGpsTime, 0, sizeof(LLSystemState.szGpsTime));
+      
+          g_pGPS->crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
+    
+          if(age != TinyGPS::GPS_INVALID_AGE)
+          {
+            LLSystemState.bValidSignal = true;
+            
+            sprintf_P(LLSystemState.szGpsTime, PSTR("%02d:%02d:%02d"), hour, minute, second);
+            
+            
+            dtClock  = DateTime(year, month, day, hour, minute, second);
+
+            fAlt     = g_pGPS->f_altitude();
+            nSat     = g_pGPS->satellites();
+            nHDOP    = g_pGPS->hdop();
+            fSpeed   = g_pGPS->f_speed_kmph();
+            fCourse  = g_pGPS->f_course();
+
+            g_pGPS->f_get_position(&fLat, &fLon, &age);
+            
+            if((nSat == TinyGPS::GPS_INVALID_SATELLITES) || (nSat < 3))
+            {
+              LLSystemState.bValidSignal = false;
+            };
+
+            if(nHDOP == TinyGPS::GPS_INVALID_HDOP)
+            {
+              LLSystemState.bValidSignal = false;
+            };
+            
+            if(fAlt == TinyGPS::GPS_INVALID_ALTITUDE)
+            {
+              LLSystemState.bValidSignal = false;
+            };
+          };
+
+          
+          if(LLSystemState.bValidSignal == false)
+          {
+            memset(LLSystemState.szGpsTime, 0, sizeof(LLSystemState.szGpsTime));
+            strcpy_P(LLSystemState.szGpsTime, PSTR("no fix"));
+
+            //to show values on the display 
+            //aquiring a lock can take a huge amount 
+            //of time, better to show some values (instead of 0)
+            LLSystemState.nNumSat     = nSat;
+            LLSystemState.fLatitude   = fLat;
+            LLSystemState.fLongitude  = fLon;
+          }
+          else
+          {
+            LLSystemState.fAltitude   = fAlt;
+            LLSystemState.nNumSat     = nSat;
+            LLSystemState.fLatitude   = fLat;
+            LLSystemState.fLongitude  = fLon;
+            LLSystemState.dwLastValid = millis();
+            LLSystemState.fSpeed      = fSpeed;
+            LLSystemState.nHDOP       = nHDOP;
+            LLSystemState.fCourse     = fCourse;
+
+            lDiff = dtClock.unixtime() - ClockPtr->getUnixTimestamp();
+
+            if(lDiff < 0) 
+            {
+              lDiff *= -1;
+            };
+
+            #ifdef GPSSTATSDEBUG
+              Serial.print(F("[GPS] difference to loc clock (sec): "));
+              Serial.print(lDiff);
+              Serial.print(F(" Lat: "));
+              Serial.print(fLat);
+              Serial.print(F(" Lon: "));
+              Serial.println(fLon);
+            #endif
+            
+            //update clock if not already done, or time is from a remote or unknown source
+            //of if the difference to GPS is > 10min
+            if(((lDiff / 60) > 10) || (ClockPtr->timeSet() == false) || ((ClockPtr->getUpdateSource() != UPDATE_SOURCE_NTP) && (ClockPtr->getUpdateSource() != UPDATE_SOURCE_EXTERNAL)))
+            {
+              ClockPtr->SetDateTime(year, month, day, hour, minute, UPDATE_SOURCE_EXTERNAL);
+  
+              //update schedules after reboot or initial time change
+              g_pDbTaskScheduler->rescheduleAfterTimechange();
+            };
+          };
+        }
+        else
+        {
+          //no data from RX
+          //no rx connected or error
+          memset(LLSystemState.szGpsTime, 0, sizeof(LLSystemState.szGpsTime));
+          strcpy_P(LLSystemState.szGpsTime, PSTR("GPS ERR"));
+        };
+      };
+
+      ResetWatchDog();
+  
+      delay(200);
+    };
+  };
+
+#endif
+  
 
 #if LORALINK_HARDWARE_OLED == 1
 

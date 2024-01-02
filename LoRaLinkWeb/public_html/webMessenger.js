@@ -1,5 +1,6 @@
 //globals
 /////////
+var g_dwNodeID        = 0;
 var g_nAppMinWidth    = 900;
 var g_strServer       = "/";
 var g_nLoadPos = 0;
@@ -27,6 +28,10 @@ var g_lLocalTimeStamp = 0;
 var g_bTrackingActive = false;
 var g_nTrackingType   = 0;
 var g_pRadar          = null;
+var g_pMap            = null;
+var g_aTileDownloader = [];
+var g_bTileDownload   = false;
+var g_bOnlineTiles    = false;
 
 
 var strChatHeadEntry = `<tr class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
@@ -212,7 +217,8 @@ function readWebEvents() {
                 };
 
                 g_bGpsValid = msg["bValidSignal"];
-
+                g_fLocalLat = msg["fLatitude"];
+                g_fLocalLon = msg["fLongitude"];
                 
                 if((msg["bTrackingActive"] !== g_bTrackingActive) || (g_nTrackingType !== msg["nTrackingType"])) {
                     if(msg["bTrackingActive"] === true) {
@@ -347,6 +353,14 @@ function readWebEvents() {
             };
         }
     });
+    
+    
+    //dwonload tiles one by one...
+    //had to also use a bool to avoid async downloading of tiles, which 
+    //crashed the esp (even if async set to false, i had multiple uploads)
+    if((g_bTileDownload == false) && (g_bOnlineTiles == true)) { 
+        tileDownloader();
+    };
 };
 
 
@@ -367,6 +381,138 @@ function resizeWindow() {
     $("#txtMsgTextShoutOut").width($("#tbShoutOut").width() - 133);
     
     toggleMessageView(g_bMessageView);
+};
+
+
+function showMapView() {
+    
+    toggleMessageView(true);
+    
+    $("#tbChatMsgs").hide();
+    $("#tbShoutOut").hide();
+    
+    $("#divMapContainer").html("<div id=\"map\"></div>");
+    $("#divMapContainer").show();
+    
+    //ask dev if it is connected to a wifi network
+    //if true, assume, that the user connects via the 
+    //external wifi connection, so that the client can 
+    //access the web, if he connects via the dev ap, this 
+    //won't work...
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        crossDomain: true,
+        data: '{"command": "GetWiFi"' +
+              '}',
+        contentType: 'application/json; charset=utf-8',
+        dataType: 'json',
+        async: true,
+        success: function(msg) {
+            console.log(JSON.stringify(msg));
+            
+            if(msg["response"] === "OK") {
+                if((msg["szDevIP"] !== "Not Connected") && (msg["szDevIP"].length > 0)) {
+                    
+                    console.log("Show online data");
+                    g_bOnlineTiles = true;
+                    
+                    if(g_bGpsValid === true) {
+                        // Create the map
+                        g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
+                    }
+                    else {
+                        // Create the map
+                        g_pMap = L.map('map').setView([51, 6], 4);
+                    };
+
+                    // Set up the OSM layer
+                    L.tileLayer(
+                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                    ).addTo(g_pMap);
+                }
+                else {
+                    console.log("Show offline data");
+                    g_bOnlineTiles = false;
+                    
+                    if(g_bGpsValid === true) {
+                        // Create the map
+                        g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
+                    }
+                    else {
+                        // Create the map
+                        g_pMap = L.map('map').setView([51, 6], 4);
+                    };
+                    
+                    // Set up the OSM layer
+                    L.tileLayer(
+                    '/tiles/{z}/{x}/{y}.png'
+                    ).addTo(g_pMap);
+                };
+                
+                
+                //create back btn
+                var btnMapBack = L.control({position: 'topright'});
+
+                btnMapBack.onAdd = function (g_pMap) {
+
+                    var div = L.DomUtil.create('div', '');
+                    
+                    div.innerHTML += "<a onclick='javascript: closeMapView();'><img src='/back.png' width='40' height='40'></a>";
+                    
+                    return div;
+                };
+                
+                btnMapBack.addTo(g_pMap);
+                
+                
+                //show device labels
+                loadKnownDevices(true, true);
+            };
+        },
+        error: function (msg) {
+            console.log(JSON.stringify(msg));
+        }
+    });
+};
+
+
+
+function closeMapView() {
+    $("#divMapContainer").hide();
+    toggleMessageView(false);
+}
+
+
+function updateDeviceMarkers() {
+    //variables
+    ///////////
+    var blueIcon = new L.icon({iconUrl: '/images/marker-icon.png',
+        shadowUrl: '/images/marker-shadow.png'
+        });
+    var greenIcon = new L.icon({iconUrl: '/images/marker-icon-green.png',
+        shadowUrl: '/images/marker-shadow.png',
+    });
+    
+    for(var i = 0; i < g_aKnownNodes.length; ++i) {
+        //if pos is valid
+        if((parseFloat(g_aKnownNodes[i].posN) !== 0) && (parseFloat(g_aKnownNodes[i].posE) !== 0)) {
+            L.marker([parseFloat(g_aKnownNodes[i].posN), parseFloat(g_aKnownNodes[i].posE)], {icon: blueIcon}).addTo(g_pMap).bindPopup(
+                    "<b>" + g_aKnownNodes[i].DevName + "</b><br/>ID: " + 
+                    g_aKnownNodes[i].NodeID + "<br/>Last Heard: " + g_aKnownNodes[i].LastHeard
+            );
+        };
+    };
+    
+    
+    if(g_bGpsValid == true) {
+        if((parseFloat(g_fLocalLat) != 0) && (parseFloat(g_fLocalLon) != 0)) {
+            L.marker([parseFloat(g_fLocalLat), parseFloat(g_fLocalLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
+                    "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
+                    g_dwNodeID
+            );
+        };
+    };
 };
 
 
@@ -404,7 +550,11 @@ function toggleMessageView(bOpenMessageView) {
 
 
 
-
+/**
+ * load device config, user settings and messages
+ * 
+ * @returns {undefined}
+ */
 function onLoad() {
     //variables
     ///////////
@@ -415,17 +565,231 @@ function onLoad() {
     $("#hfUserID").val(QueryString["userid"]);
     $("#hfSelectedChatID").val("0");
   
+    //check if query string had all parameters
     if(($("#hfUserID").val().length <= 0) || ($("#hfUser").val().length <= 0) || ($("#hfPwdHash").val().length <= 0)) {
         window.location.href = "./index.html";
     }
     else {
         resizeWindow();
         
+        
+        //get device config
+        $.ajax({
+            url: g_strServer + 'api/api.json',
+            type: 'POST',
+            data: '{"command": "GetDeviceCfg", ' +
+                  ' "userID": ' + $("#hfUserID").val() + ', ' +
+                  ' "hash": "' + $("#hfPwdHash").val() + '"}',
+            contentType: 'application/json; charset=utf-8',
+            crossDomain: true,
+            dataType: 'json',
+            async: true,
+            headers: {
+                "accept": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                "Access-Control-Allow-Methods": "GET, POST"
+            },
+            success: function(msg) {
+                console.log(JSON.stringify(msg));
+
+                if(msg["response"] === "OK") {
+                    $("#hfNodeName").val(msg["szDevName"]);
+                    g_dwNodeID = parseInt(msg["dwDeviceID"]);
+                    $("#lblNodeNme").text(msg["szDevName"]);
+                };
+            },
+            error: function (msg) {
+                console.log(JSON.stringify(msg));
+            }
+        });
+        
+        
+        //add eventhandler to capture tile requests to store OSM 
+        //tiles on the device...
+        document.addEventListener("tileLoaded", function(e) {
+            
+            if(g_bOnlineTiles == true) {
+                console.log("event src: " + e.detail); 
+
+                if(g_aTileDownloader.indexOf(e.detail) === -1) {
+                    g_aTileDownloader.push(e.detail);
+                };
+            };
+        });
+        
+        
+        
         loadUserContacts(false);
         
         initWebEventReader();
     };
 };
+
+
+
+/**
+ * this function downloads visited tiles to the sd card one by one.
+ * the downloader will be called once a second to avoid flooding the 
+ * device with requests.
+ * 
+ * @returns {Number}
+ */
+async function tileDownloader() {
+    //variables
+    ///////////
+    var strFile = "";
+
+    if(g_aTileDownloader.length > 0) {
+        
+        console.log("tileDownloader: check tile: " + g_aTileDownloader[0]);
+        g_bTileDownload = true;
+    
+        //get the image path 
+        //since the source is openstreetmap, search for .org
+        strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
+
+        console.log("file: " + strFile);
+
+        //check if tile exist on the device
+        $.ajax({
+            url: g_strServer + 'api/api.json',
+            type: 'POST',
+            data: '{"command": "fileExist", ' +
+                  ' "file": "' + "/tiles" + strFile + '"' +
+                  '}',
+            contentType: 'application/json; charset=utf-8',
+            crossDomain: true,
+            dataType: 'json',
+            async: false,
+            headers: {
+                "accept": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                "Access-Control-Allow-Methods": "GET, POST"
+            },
+            success: async function(msg) {
+                //variables
+                ///////////
+                var strPath = "";
+                var strFolder = "";
+                var nIdx = 0;
+
+                console.log(JSON.stringify(msg));
+
+                //on error try to create the path, don't care if it exist...
+                if(msg["response"] == "ERR") {
+
+                    strFile = "/tiles" + strFile;
+
+                    while(nIdx < strFile.length) {
+                        strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
+                        nIdx    = strFile.indexOf("/", nIdx + 1);
+
+                        if(nIdx < 0) {
+                            break;
+                        };
+
+                        if(strPath !== "/tiles") {
+
+                            strFolder = strPath;
+                            console.log("Create dir: " + strPath);
+
+                            $.ajax({
+                                url: g_strServer + 'api/api.json',
+                                type: 'POST',
+                                crossDomain: true,
+                                data: '{"command": "createFolder", ' +
+                                      ' "NewFolder": "' + strPath + '", ' +
+                                      ' "Folder": ""}',
+                                contentType: 'application/json; charset=utf-8',
+                                dataType: 'json',
+                                async: false,
+                                success: function(msg) {
+
+                                },
+                                error: function (msg) {
+                                    console.log("Error create folder:");
+
+                                    console.log(JSON.stringify(msg));
+                                }
+                            });
+                        };
+                    };
+
+                    //path should exist now, download the file
+                    const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
+                }
+                else {
+                    g_bTileDownload = false;
+                };
+            },
+            error: function (msg) {
+
+                console.log(JSON.stringify(msg));
+                
+                g_bTileDownload = false;
+            }
+        });
+        
+        g_aTileDownloader.splice(0, 1);
+    };
+    
+    
+    return g_aTileDownloader.length;
+};
+
+
+/**
+ * this function downloads the image, converts the downloaded blob to 
+ * a file, passes it to the upload form and calls the upload function 
+ * 
+ * @param {type} strPath
+ * @param {type} strFile
+ * @param {type} imageSrc
+ * @returns {unresolved}
+ */
+async function downloadImage(strPath, strFile, imageSrc) {
+    //variables
+    ///////////
+    const form          = document.getElementById("frmFileUpload");
+    const fileInput     = document.getElementById('file');
+    const dataTransfer  = new DataTransfer();
+    const image         = await fetch(imageSrc);
+    const imageBlob     = await image.blob();
+    var strFileName     = strFile.replace(strPath, "");
+    const file          = new File([imageBlob], strFileName.substring(1), { type: imageBlob.type });
+    
+  
+    console.log("Save data from " + imageSrc + " to folder: " + strPath + " file: " + strFileName.substring(1));
+    
+    dataTransfer.items.add(file);
+    fileInput.files = dataTransfer.files;
+    
+    var fd = new FormData(form);
+    const res = await uploadFile(fd, strPath); 
+    
+    return res;
+};
+
+
+/**
+ * this function sends the file to the device and sets the download flag 
+ * to false after upload.
+ * 
+ * @param {type} formData
+ * @param {type} strPath
+ * @returns {unresolved}
+ */
+async function uploadFile(formData, strPath) {
+    return fetch("/upload?folder=" + encodeURI(strPath),
+        {
+          method: 'POST',
+          body: formData
+        }
+    )
+    .then((response)=> { g_bTileDownload = false; return response; });
+}
 
 
 
@@ -443,8 +807,8 @@ function loadFinished() {
 
 
 
-function showNewChatDialog() {
-    $("#txtMsgTo").val("");
+function showNewChatDialog(strRcpt) {
+    $("#txtMsgTo").val(strRcpt);
     $("#txtMsgText").val("");
     $("#dlgNewChat").modal('show');
     
@@ -719,7 +1083,7 @@ function loadChatsFromDevice(bUpdateOnly) {
             };
             
             if(bUpdateOnly === false) {
-                loadKnownDevices(false);
+                loadKnownDevices(false, false);
             };
         },
         error: function (msg) {
@@ -735,7 +1099,7 @@ function loadChatsFromDevice(bUpdateOnly) {
 };
 
 
-function loadKnownDevices(bUpdateOnly) {
+function loadKnownDevices(bUpdateOnly, bCreateMapLabels) {
     
     $("#lblDesc").text("Load existing nodes...");
     
@@ -762,6 +1126,10 @@ function loadKnownDevices(bUpdateOnly) {
             
             if(bUpdateOnly == false) {
                 loadFinished();
+            };
+            
+            if(bCreateMapLabels == true) {
+                updateDeviceMarkers();
             };
         },
         error: function (msg) {
@@ -894,6 +1262,9 @@ function loadChatMsgs(chatID, bResetNew) {
     ///////////
     var chat = getChatHeadByID(chatID);
     var oContact = null;
+    
+    
+    $("#divMapContainer").hide();
     
     
     g_aChatMsgs = [];
@@ -1233,6 +1604,7 @@ function getChatHeadByID(chatID) {
 
 
 function showShoutOut() {
+    $("#divMapContainer").hide();
     $('#tbShoutOut').show(); 
     $('#tbChatMsgs').hide();
     $("#hfSelectedChatID").val("0");
@@ -1295,8 +1667,8 @@ function loadShoutOutMsgs(dwMsgID) {
                 strMsg = decodeURI(strMsg);
                 
                 strHTML = "<tr>";
-                strHTML += "<td>" + msgs[n].SentTime + "</td>";
-                strHTML += "<td>" + decodeURI(msgs[n].Sender) + "</td>";
+                strHTML += "<td style='width: 120px;'>" + msgs[n].SentTime + "</td>";
+                strHTML += "<td style='width: 150px; overflow: hidden;'><a onclick='javascript: showNewChatDialog(\"" + decodeURI(msgs[n].Sender) + "\");'>" + decodeURI(msgs[n].Sender) + "</a></td>";
                 strHTML += "<td>" + strMsg + "</td>";
                 strHTML += "</tr>";
                 
@@ -1518,7 +1890,7 @@ function getRouting() {
 
 function showRadar() {
     
-    loadKnownDevices(true);
+    loadKnownDevices(true, false);
     getRouting();
     
     $("#dlgRadar").modal("show");
