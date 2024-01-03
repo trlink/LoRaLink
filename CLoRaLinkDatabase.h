@@ -27,7 +27,6 @@
 
 
 
-
 #define USERTABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/user.tbl")).c_str()
 #define USERTABLE_SIZE 9
 

@@ -26,7 +26,7 @@ using namespace httpsserver;
 
 //defines
 /////////
-#define WEBSERVERDEBUG
+//#define WEBSERVERDEBUG
 //#define WEBSERVERDEBUGX
 #define MAX_FILE_RESP_BUFF_SIZE       2048
 

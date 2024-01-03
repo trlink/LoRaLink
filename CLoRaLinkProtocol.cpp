@@ -643,7 +643,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(_sSkyNetProtocolMessage *pPro
           float               fDst = 0;
           float               fCourse2 = 0;
           uint32_t            dwTime = ClockPtr->getUnixTimestamp();
-          CWSFFileDBRecordset *pRS = new CWSFFileDBRecordset(g_pNodeTable);
+          CWSFFileDBRecordset *pRS;
                 
           if(LLPROTO_DecodeUserPositionInd(pPayload, nPayloadLen, (float*)&fCourse, (float*)&fSpeed, (int*)&nHDOP, (int*)&nNumSat, (uint32_t*)&dwLastValid, (float*)&fLatitude, (float*)&fLongitude, (float*)&fAltitude, (bool*)&bValidSignal, (int*)&nPosType) == true)
           {
@@ -676,15 +676,17 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(_sSkyNetProtocolMessage *pPro
             //update position in node table
             if(bValidSignal == true)
             {
+              pRS = new CWSFFileDBRecordset(g_pNodeTable);
+              
               if(FindDeviceByNodeID(pRS, pProtocolMsg->nOriginID) == true)
               {
                 pRS->setData(3, (void*)&fLatitude, sizeof(fLatitude));
                 pRS->setData(4, (void*)&fLongitude, sizeof(fLongitude));
                 pRS->setData(6, (void*)&dwTime, sizeof(dwTime));
               };
+
+              delete pRS;
             };
-            
-            delete pRS;
           };
         };
         break;

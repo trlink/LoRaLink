@@ -3723,6 +3723,15 @@ void ModemDataTask(void *pParam)
               //update schedules after reboot or initial time change
               g_pDbTaskScheduler->rescheduleAfterTimechange();
             };
+
+
+            //if gps transmission is enabled (set a dev location not 0), and we have a valid signal,
+            //use the coordinates from the gps receiver
+            if((DeviceConfig.fLocN != 0) && (DeviceConfig.fLocE != 0)) 
+            {
+              DeviceConfig.fLocN = LLSystemState.fLatitude;
+              DeviceConfig.fLocE = LLSystemState.fLongitude;  
+            };
           };
         }
         else

@@ -1,9 +1,10 @@
 //globals
 /////////
 var g_dwNodeID        = 0;
+var g_nDeviceType     = 1;      //personal by default
 var g_nAppMinWidth    = 900;
 var g_strServer       = "/";
-var g_nLoadPos = 0;
+var g_nLoadPos        = 0;
 var MAX_MESSAGE_CHARS = 1500;
 var g_aKnownNodes     = [];
 var g_aRoutes         = {};
@@ -30,8 +31,10 @@ var g_nTrackingType   = 0;
 var g_pRadar          = null;
 var g_pMap            = null;
 var g_aTileDownloader = [];
+var g_aTileCheck      = [];
 var g_bTileDownload   = false;
 var g_bOnlineTiles    = false;
+var g_bPoisChanged    = false;
 
 
 var strChatHeadEntry = `<tr class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
@@ -361,6 +364,13 @@ function readWebEvents() {
     if((g_bTileDownload == false) && (g_bOnlineTiles == true)) { 
         tileDownloader();
     };
+    
+    //check if tiles exist
+    if(g_bOnlineTiles == true) {
+        tileCheck();
+    };
+    
+    
 };
 
 
@@ -468,6 +478,10 @@ function showMapView() {
                 
                 //show device labels
                 loadKnownDevices(true, true);
+                
+                
+                //show pois on map
+                addPoisOnMap();
             };
         },
         error: function (msg) {
@@ -483,7 +497,11 @@ function closeMapView() {
     toggleMessageView(false);
 }
 
-
+/**
+ * this function shows the device markers on the map
+ * 
+ * @returns {undefined}
+ */
 function updateDeviceMarkers() {
     //variables
     ///////////
@@ -595,12 +613,18 @@ function onLoad() {
 
                 if(msg["response"] === "OK") {
                     $("#hfNodeName").val(msg["szDevName"]);
-                    g_dwNodeID = parseInt(msg["dwDeviceID"]);
                     $("#lblNodeNme").text(msg["szDevName"]);
+                    
+                    g_dwNodeID      = msg["dwDeviceID"];
+                    g_nDeviceType   = msg["nDeviceType"];
                 };
             },
             error: function (msg) {
                 console.log(JSON.stringify(msg));
+                
+                alert("Failed to load device config!");
+                
+                window.location.href = "./index.html";
             }
         });
         
@@ -612,14 +636,13 @@ function onLoad() {
             if(g_bOnlineTiles == true) {
                 console.log("event src: " + e.detail); 
 
-                if(g_aTileDownloader.indexOf(e.detail) === -1) {
-                    g_aTileDownloader.push(e.detail);
+                if(g_aTileCheck.indexOf(e.detail) === -1) {
+                    g_aTileCheck.push(e.detail);
                 };
             };
         });
         
-        
-        
+
         loadUserContacts(false);
         
         initWebEventReader();
@@ -629,25 +652,23 @@ function onLoad() {
 
 
 /**
- * this function downloads visited tiles to the sd card one by one.
- * the downloader will be called once a second to avoid flooding the 
- * device with requests.
+ * this function checks visited tiles, if they are exist on the device.
+ * If they are not found, they will be added to the downloader
  * 
  * @returns {Number}
  */
-async function tileDownloader() {
+async function tileCheck() {
     //variables
     ///////////
     var strFile = "";
 
-    if(g_aTileDownloader.length > 0) {
+    if(g_aTileCheck.length > 0) {
         
-        console.log("tileDownloader: check tile: " + g_aTileDownloader[0]);
-        g_bTileDownload = true;
-    
+        console.log("tileCheck: check tile: " + g_aTileCheck[0]);
+        
         //get the image path 
         //since the source is openstreetmap, search for .org
-        strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
+        strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
 
         console.log("file: " + strFile);
 
@@ -669,72 +690,110 @@ async function tileDownloader() {
                 "Access-Control-Allow-Methods": "GET, POST"
             },
             success: async function(msg) {
-                //variables
-                ///////////
-                var strPath = "";
-                var strFolder = "";
-                var nIdx = 0;
-
+                
                 console.log(JSON.stringify(msg));
+                
+                if(msg["response"] === "ERR") {
+                    if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
+                        g_aTileDownloader.push(g_aTileCheck[0]);
 
-                //on error try to create the path, don't care if it exist...
-                if(msg["response"] == "ERR") {
-
-                    strFile = "/tiles" + strFile;
-
-                    while(nIdx < strFile.length) {
-                        strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
-                        nIdx    = strFile.indexOf("/", nIdx + 1);
-
-                        if(nIdx < 0) {
-                            break;
-                        };
-
-                        if(strPath !== "/tiles") {
-
-                            strFolder = strPath;
-                            console.log("Create dir: " + strPath);
-
-                            $.ajax({
-                                url: g_strServer + 'api/api.json',
-                                type: 'POST',
-                                crossDomain: true,
-                                data: '{"command": "createFolder", ' +
-                                      ' "NewFolder": "' + strPath + '", ' +
-                                      ' "Folder": ""}',
-                                contentType: 'application/json; charset=utf-8',
-                                dataType: 'json',
-                                async: false,
-                                success: function(msg) {
-
-                                },
-                                error: function (msg) {
-                                    console.log("Error create folder:");
-
-                                    console.log(JSON.stringify(msg));
-                                }
-                            });
-                        };
-                    };
-
-                    //path should exist now, download the file
-                    const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
-                }
-                else {
-                    g_bTileDownload = false;
+                        $("#pbTileDownloader").attr("aria-valuemax", parseInt($("#pbTileDownloader").attr("aria-valuemax")) + 1);
+                    };        
                 };
             },
             error: function (msg) {
 
                 console.log(JSON.stringify(msg));
-                
-                g_bTileDownload = false;
             }
         });
         
-        g_aTileDownloader.splice(0, 1);
+        g_aTileCheck.splice(0, 1);
     };
     
+    
+    return g_aTileCheck.length;
+};
+
+
+
+/**
+ * this function downloads visited tiles to the sd card one by one.
+ * the downloader will be called once a second to avoid flooding the 
+ * device with requests.
+ * 
+ * @returns {Number}
+ */
+async function tileDownloader() {
+    //variables
+    ///////////
+    var strFile = "";
+    var strPath = "";
+    var strFolder = "";
+    var nIdx = 0;
+    
+    
+    if(g_bTileDownload === false) {
+        if(g_aTileDownloader.length > 0) {
+            console.log("tileDownloader: download tile: " + g_aTileDownloader[0]);
+            
+            g_bTileDownload = true;
+            
+            //get the image path 
+            //since the source is openstreetmap, search for .org
+            strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
+
+            //try to create the path, don't care if it exist...
+            strFile = "/tiles" + strFile;
+
+            while(nIdx < strFile.length) {
+                strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
+                nIdx    = strFile.indexOf("/", nIdx + 1);
+
+                if(nIdx < 0) {
+                    break;
+                };
+
+                if(strPath !== "/tiles") {
+
+                    strFolder = strPath;
+                    console.log("Create dir: " + strPath);
+
+                    $.ajax({
+                        url: g_strServer + 'api/api.json',
+                        type: 'POST',
+                        crossDomain: true,
+                        data: '{"command": "createFolder", ' +
+                              ' "NewFolder": "' + strPath + '", ' +
+                              ' "Folder": ""}',
+                        contentType: 'application/json; charset=utf-8',
+                        dataType: 'json',
+                        async: false,
+                        success: function(msg) {
+
+                        },
+                        error: function (msg) {
+                            console.log("Error create folder:");
+
+                            console.log(JSON.stringify(msg));
+                        }
+                    });
+                };
+            };
+
+            //path should exist now, download the file
+            const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
+            
+            g_aTileDownloader.splice(0, 1);
+            g_bTileDownload = false;
+        }
+        else {
+            $("#pbTileDownloader").attr("aria-valuenow", "0");
+            $("#pbTileDownloader").attr("aria-valuemax", "0");
+            $("#pbTileDownloader").css("width", "0%");
+            
+            g_bTileDownload = false;
+        };
+    };
     
     return g_aTileDownloader.length;
 };
@@ -769,6 +828,13 @@ async function downloadImage(strPath, strFile, imageSrc) {
     var fd = new FormData(form);
     const res = await uploadFile(fd, strPath); 
     
+    $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
+    
+    //update progress bar
+    $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / parseInt($("#pbTileDownloader").attr("aria-valuemax"))) * 100.0) + "%");
+    
+    g_bTileDownload = false; 
+    
     return res;
 };
 
@@ -788,7 +854,7 @@ async function uploadFile(formData, strPath) {
           body: formData
         }
     )
-    .then((response)=> { g_bTileDownload = false; return response; });
+    .then((response)=> { return response; });
 }
 
 
@@ -2128,6 +2194,7 @@ function getNodeByID(nodeID) {
     return null;
 }
 
+
 function radarItemClicked(pointID) {
     //variables
     ///////////
@@ -2141,5 +2208,149 @@ function radarItemClicked(pointID) {
         strHTML = "<tr><td>" + pointID + "</td><td>" + oNode.DevName + "</td><td>" + oGPS.Lat + "</td><td>" + oGPS.Lon + "</td><td>" + oGPS.Speed + "</td><td>" + oGPS.Course + "</td><td>" + oGPS.Dst + "</td></tr>";
         
         $("#tbNodeDetailsBody").html(strHTML);
+    };
+};
+
+
+/**
+ * this function downloads the poidata.json file from the device and
+ * add the data to the table. POis are outside the device functionallity,
+ * internally they will not be handled, so handling of POIs are a client 
+ * side feature...
+ * 
+ * @returns {undefined}
+ */
+function showManagePOI() {
+    //variables
+    ///////////
+    var strHTML = "";
+    
+    $("#tbPoiDataBody").html("");
+    $("#dlgPoiManagement").modal("show");
+    
+    fetch('/poidata.json', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+   .then(response => response.json())
+   .then(response => { 
+        console.log(JSON.stringify(response));
+       
+        for(var n = 0; n < response["pois"].length; ++n) {
+            strHTML += "<tr id='poidata_" + n + "'>";
+            strHTML += "    <td>" + response["pois"][n].Latitude + "</td>";
+            strHTML += "    <td>" + response["pois"][n].Longitude + "</td>";
+            strHTML += "    <td><img src='" + response["pois"][n].Icon + "' style='height: 15px;'></td>";
+            strHTML += "    <td>" + decodeURI(response["pois"][n].Desc) + "</td>";
+            strHTML += "    <td><a onclick='javascript: document.getElementById(\"poidata_" + n + "\").remove(); g_bPoisChanged = true;'>delete</a></td>";
+            strHTML += "</tr>";
+        };
+        
+        $("#tbPoiDataBody").html(strHTML);
+   });
+   
+   g_bPoisChanged = false;
+};
+
+
+/**
+ * this function adds the pois to the map
+ * 
+ * @returns {undefined}
+ */
+function addPoisOnMap() {
+    
+    fetch('/poidata.json', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+   .then(response => response.json())
+   .then(response => { 
+        console.log(JSON.stringify(response));
+       
+        for(var n = 0; n < response["pois"].length; ++n) {
+
+            var mapicon = new L.icon({iconUrl: response["pois"][n].Icon,
+                shadowUrl: '/images/marker-shadow.png'
+            });
+    
+            L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).addTo(g_pMap).bindPopup(
+                    "<b>POI:</b><br/>" + decodeURI(response["pois"][n].Desc));
+        };
+   });
+};
+
+
+
+
+
+function addPoi() {
+    //variables
+    ///////////
+    var element = document.getElementById("tbPoiDataBody");
+    var number = element.getElementsByTagName('*').length + 1;
+    var strHTML = $("#tbPoiDataBody").html();
+    
+    if(($("#txtPoiLatitude").val().length > 0) && ($("#txtPoiLongitude").val().length > 0) && ($('#cmbPoiIcon').attr('data-selected').length > 0)) {
+        strHTML += "<tr id='poidata_" + number + "'>";
+        strHTML += "    <td>" + $("#txtPoiLatitude").val() + "</td>";
+        strHTML += "    <td>" + $("#txtPoiLongitude").val() + "</td>";
+        strHTML += "    <td><img src='" + $('#cmbPoiIcon').attr('data-selected') + "' style='height: 15px;'></td>";
+        strHTML += "    <td>" + $("#txtPoiDesc").val() + "</td>";
+        strHTML += "    <td><a onclick='javascript: document.getElementById(\"poidata_" + number + "\").remove();'>delete</a></td>";
+        strHTML += "</tr>";
+        
+        $("#tbPoiDataBody").html(strHTML);
+    };
+    
+    g_bPoisChanged = true;
+};
+
+
+
+
+async function savePoiData() {
+    //variables
+    ///////////
+    const form          = document.getElementById("frmFileUpload");
+    const fileInput     = document.getElementById('file');
+    const dataTransfer  = new DataTransfer();
+    var element         = document.getElementById("tbPoiDataBody");
+    var number          = element.getElementsByTagName('*').length;
+    var strJson         = "{\"pois\": [";
+    
+    if(g_bPoisChanged === true) {
+        if(number > 0) {
+            for(var r = 0; r < element.rows.length; ++r) {
+                if(r > 0) {
+                    strJson += ",";
+                };
+
+                strJson += "{";
+
+                strJson += "\"Latitude\": " + element.rows[r].cells[0].innerText + ", ";
+                strJson += "\"Longitude\": " + element.rows[r].cells[1].innerText + ", ";
+                strJson += "\"Icon\": \"" + $(element.rows[r].cells[2]).children('img').first().attr("src") + "\", ";
+                strJson += "\"Desc\": \"" + encodeURI(element.rows[r].cells[3].innerText) + "\"";
+
+                strJson += "}";
+            }; 
+        };
+
+        strJson += "]}";
+
+
+        var oMyBlob = new Blob([strJson], {type : 'application/json'});
+        var file    = new File([oMyBlob], "poidata.json", { type: oMyBlob.type });
+
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        var fd      = new FormData(form);
+        const res   = await uploadFile(fd, "/");
     };
 };
