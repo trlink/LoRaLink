@@ -2648,9 +2648,9 @@ function showTracks() {
             console.log(JSON.stringify(msg));
             
             for(var i = 0; i < msg["Tracks"].length; ++i) {
-                strHTML += "<tr><td><span>" + msg["Tracks"][i].Time + "</span></td><td><span>" + decodeURI(msg["Tracks"][i].Desc) + "</span></td>" +
-                        "<td><a onclick='javascript: exportTrack(" + msg["Tracks"][i].ID + ", \"" + decodeURI(msg["Tracks"][i].Desc) + "\");'><img style='margin-left: 12px; height: 20px;' src='/images/disk.png' alt='export track'></a>" +
-                        "<td><a onclick='javascript: deleteTrack(" + msg["Tracks"][i].ID + ");'><img style='margin-left: 12px; height: 20px;' src='/images/trash.png' alt='delete track'></a>" +
+                strHTML += "<tr><td><span>" + msg["Tracks"][i].Time + "</span></td><td><span>" + decodeURI(msg["Tracks"][i].Desc) + (msg["Tracks"][i].Active === 1 ? " (recording)" : "") + "</span></td>" +
+                        "<td><a onclick='javascript: exportTrack(" + msg["Tracks"][i].ID + ", \"" + decodeURI(msg["Tracks"][i].Desc) + "\");'><img style='margin-left: 12px; height: 20px;' src='/images/disk.png' alt='export track'></a></td>" +
+                        "<td><a onclick='javascript: deleteTrack(" + msg["Tracks"][i].ID + ");'><img style='margin-left: 12px; height: 20px;' src='/images/trash.png' alt='delete track'></a></td>" +
                         "</tr>";
             };
             

@@ -736,7 +736,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
                 };
 
                 memset(buffer, 0, 300);
-                sprintf_P(buffer, PSTR("{\"Time\": \"%4i-%02i-%02i %02i:%02i:%02i\", \"Desc\": \"%s\", \"ID\": %u}"), dtTime.year(), dtTime.month(), dtTime.day(), dtTime.hour(), dtTime.minute(), dtTime.second(), szDesc, pRecordset->getRecordPos());
+                sprintf_P(buffer, PSTR("{\"Time\": \"%4i-%02i-%02i %02i:%02i:%02i\", \"Desc\": \"%s\", \"ID\": %u, \"Active\": %i}"), dtTime.year(), dtTime.month(), dtTime.day(), dtTime.hour(), dtTime.minute(), dtTime.second(), szDesc, pRecordset->getRecordPos(), (g_dwRecordTrackID == pRecordset->getRecordPos() ? 1 : 0));
                 resp->println(buffer);
 
                 bHadEntry = true;
