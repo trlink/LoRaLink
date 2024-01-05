@@ -14,6 +14,7 @@
 #define DBTASK_CONFIRMTRANSFER  6
 #define DBTASK_CHECKWEBSERVER   7
 #define DBTASK_SEND_POSITION    8
+#define DBTASK_RECORD_TRACK     9
 
 
 //an alwys running task, which restarts file transfer after device reset

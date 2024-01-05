@@ -1,7 +1,7 @@
 //includes
 //////////
 #include "LoRaLinkConfig.h"
-#include "HardwareConfig.h"
+
 
 
 #define MAX_CFG_SIZE 2000

@@ -32,7 +32,6 @@
 #define GPS_POSITION_TYPE_EMERGENCY         1
 
 
-
 #define LORA_PROTO_TYPE_DATA_HEADER         1
 //#define LORA_PROTO_TYPE_DATA                2
 #define LORA_PROTO_TYPE_DATA_REQ            3

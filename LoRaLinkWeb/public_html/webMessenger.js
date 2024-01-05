@@ -18,6 +18,8 @@ var g_bConnected      = false;
 //gps stuff
 var g_bHaveGPS        = false;
 var g_bGpsValid       = false;
+var g_fConfigLat      = 0;
+var g_fConfigLon      = 0;
 var g_fLocalAlt       = 0.0;
 var g_fLocalLat       = 0.0;
 var g_fLocalLon       = 0.0;
@@ -35,6 +37,7 @@ var g_aTileCheck      = [];
 var g_bTileDownload   = false;
 var g_bOnlineTiles    = false;
 var g_bPoisChanged    = false;
+var g_bRecordTrack    = false;
 
 
 var strChatHeadEntry = `<tr class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
@@ -228,6 +231,18 @@ function readWebEvents() {
                         
                         $("#imgLocationTracking").show();
                         
+                        if($("#mnuDisableGpsTracking").hasClass("disabled") == true) {
+                            $("#mnuDisableGpsTracking").removeClass("disabled");
+                        };
+                        
+                        if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == false) {
+                            $("#mnuEnableEmergGpsTracking").addClass("disabled");
+                        };
+                        
+                        if($("#mnuEnableGpsTracking").hasClass("disabled") == false) {
+                            $("#mnuEnableGpsTracking").addClass("disabled");
+                        };
+                        
                         if(msg["nTrackingType"] === 0) {
                             $("#imgLocationTracking").attr("src", "locationTracking.png");
                         }
@@ -239,9 +254,45 @@ function readWebEvents() {
                     }
                     else {
                         $("#imgLocationTracking").hide();
+                        
+                        if($("#mnuDisableGpsTracking").hasClass("disabled") == false) {
+                            $("#mnuDisableGpsTracking").addClass("disabled");
+                        };
+                        
+                        if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == true) {
+                            $("#mnuEnableEmergGpsTracking").removeClass("disabled");
+                        };
+                        
+                        if($("#mnuEnableGpsTracking").hasClass("disabled") == true) {
+                            $("#mnuEnableGpsTracking").removeClass("disabled");
+                        };
                     };
                     
                     g_bTrackingActive = msg["bTrackingActive"];
+                };
+                
+                
+                if(g_bRecordTrack !== msg["bRecordTrack"]) {
+                    g_bRecordTrack = msg["bRecordTrack"];
+                    
+                    if(g_bRecordTrack == true) {
+                        if($("#mnuRecordTrackStop").hasClass("disabled") == true) {
+                            $("#mnuRecordTrackStop").removeClass("disabled");
+                        };
+                        
+                        if($("#mnuRecordTrack").hasClass("disabled") == false) {
+                            $("#mnuRecordTrack").addClass("disabled");
+                        };
+                    }
+                    else {
+                        if($("#mnuRecordTrackStop").hasClass("disabled") == false) {
+                            $("#mnuRecordTrackStop").addClass("disabled");
+                        };
+                        
+                        if($("#mnuRecordTrack").hasClass("disabled") == true) {
+                            $("#mnuRecordTrack").removeClass("disabled");
+                        };
+                    };
                 };
             };
             
@@ -482,6 +533,19 @@ function showMapView() {
                 
                 //show pois on map
                 addPoisOnMap();
+                
+                //add on click handler which adds the last clicked coordinates to the 
+                //manage poi dialog
+                g_pMap.on('click', function(e){
+                    var coord = e.latlng;
+                    var lat = coord.lat;
+                    var lng = coord.lng;
+                    
+                    console.log("clicked the map at latitude: " + lat + " and longitude: " + lng);
+                    
+                    $("#txtPoiLatitude").val(lat);
+                    $("#txtPoiLongitude").val(lng);
+                });
             };
         },
         error: function (msg) {
@@ -496,6 +560,25 @@ function closeMapView() {
     $("#divMapContainer").hide();
     toggleMessageView(false);
 }
+
+
+/**
+ * whooha, ai generated code, lazy stuff... :D 
+ * 
+ * @param {type} longitude
+ * @param {type} latitude
+ * @returns {String}
+ */
+function convertToLocator(longitude, latitude) {
+    const longitudeDegrees = Math.floor((longitude + 180) / 20) + 1;
+    const latitudeDegrees = Math.floor((latitude + 90) / 10) + 1;
+    const longitudeMinutes = Math.floor(((longitude + 180) % 20) * 60 / 2.5) % 24;
+    const latitudeMinutes = Math.floor(((latitude + 90) % 10) * 60 / 1.5) % 24;
+    const longitudeSeconds = Math.floor((((longitude + 180) % 20) * 60 / 2.5) % 1) * 60;
+    const latitudeSeconds = Math.floor((((latitude + 90) % 10) * 60 / 1.5) % 1) * 60;
+    return String.fromCharCode(65 + longitudeDegrees - 1) + String.fromCharCode(65 + latitudeDegrees - 1) + longitudeMinutes.toString().padStart(2, '0') + latitudeMinutes.toString().padStart(2, '0') + String.fromCharCode(97 + longitudeSeconds) + String.fromCharCode(97 + latitudeSeconds);
+};
+
 
 /**
  * this function shows the device markers on the map
@@ -517,7 +600,9 @@ function updateDeviceMarkers() {
         if((parseFloat(g_aKnownNodes[i].posN) !== 0) && (parseFloat(g_aKnownNodes[i].posE) !== 0)) {
             L.marker([parseFloat(g_aKnownNodes[i].posN), parseFloat(g_aKnownNodes[i].posE)], {icon: blueIcon}).addTo(g_pMap).bindPopup(
                     "<b>" + g_aKnownNodes[i].DevName + "</b><br/>ID: " + 
-                    g_aKnownNodes[i].NodeID + "<br/>Last Heard: " + g_aKnownNodes[i].LastHeard
+                    g_aKnownNodes[i].NodeID + "<br/>Last Heard: " + g_aKnownNodes[i].LastHeard + "<br/>WGS84: " +
+                    g_aKnownNodes[i].posN + ", " + g_aKnownNodes[i].posE + "<br/>Loc: " +
+                    convertToLocator(g_aKnownNodes[i].posE, g_aKnownNodes[i].posN)
             );
         };
     };
@@ -526,11 +611,25 @@ function updateDeviceMarkers() {
     if(g_bGpsValid == true) {
         if((parseFloat(g_fLocalLat) != 0) && (parseFloat(g_fLocalLon) != 0)) {
             L.marker([parseFloat(g_fLocalLat), parseFloat(g_fLocalLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
-                    "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
-                    g_dwNodeID
+                "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
+                g_dwNodeID + "<br/>WGS84: " +
+                g_fLocalLat + ", " + g_fLocalLon + "<br/>Loc: " +
+                convertToLocator(g_fLocalLon, g_fLocalLat)
             );
         };
-    };
+    }
+    else {
+        if((g_fConfigLat != 0) && (g_fConfigLon != 0)) {
+            if((parseFloat(g_fConfigLat) != 0) && (parseFloat(g_fConfigLon) != 0)) {
+                L.marker([parseFloat(g_fConfigLat), parseFloat(g_fConfigLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
+                    "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
+                    g_dwNodeID + "<br/>WGS84: " +
+                    g_fConfigLat + ", " + g_fConfigLon + "<br/>Loc: " +
+                    convertToLocator(g_fConfigLon, g_fConfigLat) + "<br/>Config value"
+                );
+            };
+        }
+    }
 };
 
 
@@ -617,6 +716,8 @@ function onLoad() {
                     
                     g_dwNodeID      = msg["dwDeviceID"];
                     g_nDeviceType   = msg["nDeviceType"];
+                    g_fConfigLat    = msg["fLocN"];
+                    g_fConfigLon    = msg["fLocE"];
                 };
             },
             error: function (msg) {
@@ -652,7 +753,7 @@ function onLoad() {
 
 
 /**
- * this function checks visited tiles, if they are exist on the device.
+ * this function checks visited tiles if they exist on the device.
  * If they are not found, they will be added to the downloader
  * 
  * @returns {Number}
@@ -840,8 +941,9 @@ async function downloadImage(strPath, strFile, imageSrc) {
 
 
 /**
- * this function sends the file to the device and sets the download flag 
- * to false after upload.
+ * this function sends the file to the device. this function will be used 
+ * for tile uploading and storing data which are not managed by the device
+ * (client side functions like poi's)
  * 
  * @param {type} formData
  * @param {type} strPath
@@ -1964,6 +2066,7 @@ function showRadar() {
 };
 
 
+
 function CRadar(elRadar) {
     //variables
     ///////////
@@ -2212,6 +2315,11 @@ function radarItemClicked(pointID) {
 };
 
 
+//poi management
+////////////////
+
+
+
 /**
  * this function downloads the poidata.json file from the device and
  * add the data to the table. POis are outside the device functionallity,
@@ -2228,7 +2336,7 @@ function showManagePOI() {
     $("#tbPoiDataBody").html("");
     $("#dlgPoiManagement").modal("show");
     
-    fetch('/poidata.json', {
+    fetch('/poidata/' + $("#hfUserID").val() + '.json', {
         method: 'GET',
         headers: {
             'Accept': 'application/json'
@@ -2240,10 +2348,10 @@ function showManagePOI() {
        
         for(var n = 0; n < response["pois"].length; ++n) {
             strHTML += "<tr id='poidata_" + n + "'>";
-            strHTML += "    <td>" + response["pois"][n].Latitude + "</td>";
-            strHTML += "    <td>" + response["pois"][n].Longitude + "</td>";
+            strHTML += "    <td><span>" + response["pois"][n].Latitude + "</span></td>";
+            strHTML += "    <td><span>" + response["pois"][n].Longitude + "</span></td>";
             strHTML += "    <td><img src='" + response["pois"][n].Icon + "' style='height: 15px;'></td>";
-            strHTML += "    <td>" + decodeURI(response["pois"][n].Desc) + "</td>";
+            strHTML += "    <td><span>" + decodeURI(response["pois"][n].Desc) + "</span></td>";
             strHTML += "    <td><a onclick='javascript: document.getElementById(\"poidata_" + n + "\").remove(); g_bPoisChanged = true;'>delete</a></td>";
             strHTML += "</tr>";
         };
@@ -2262,7 +2370,7 @@ function showManagePOI() {
  */
 function addPoisOnMap() {
     
-    fetch('/poidata.json', {
+    fetch('/poidata/' + $("#hfUserID").val() + '.json', {
         method: 'GET',
         headers: {
             'Accept': 'application/json'
@@ -2279,7 +2387,9 @@ function addPoisOnMap() {
             });
     
             L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).addTo(g_pMap).bindPopup(
-                    "<b>POI:</b><br/>" + decodeURI(response["pois"][n].Desc));
+                "<b>POI:</b><br/>" + decodeURI(response["pois"][n].Desc) + "<br/>WGS84: " +
+                response["pois"][n].Latitude + ", " + response["pois"][n].Longitude + "<br/>Loc: " +
+                convertToLocator(response["pois"][n].Longitude, response["pois"][n].Latitude));
         };
    });
 };
@@ -2287,7 +2397,11 @@ function addPoisOnMap() {
 
 
 
-
+/**
+ * this function adds a poi to the table
+ * 
+ * @returns {undefined}
+ */
 function addPoi() {
     //variables
     ///////////
@@ -2297,10 +2411,10 @@ function addPoi() {
     
     if(($("#txtPoiLatitude").val().length > 0) && ($("#txtPoiLongitude").val().length > 0) && ($('#cmbPoiIcon').attr('data-selected').length > 0)) {
         strHTML += "<tr id='poidata_" + number + "'>";
-        strHTML += "    <td>" + $("#txtPoiLatitude").val() + "</td>";
-        strHTML += "    <td>" + $("#txtPoiLongitude").val() + "</td>";
+        strHTML += "    <td><span>" + $("#txtPoiLatitude").val() + "</span></td>";
+        strHTML += "    <td><span>" + $("#txtPoiLongitude").val() + "</span></td>";
         strHTML += "    <td><img src='" + $('#cmbPoiIcon').attr('data-selected') + "' style='height: 15px;'></td>";
-        strHTML += "    <td>" + $("#txtPoiDesc").val() + "</td>";
+        strHTML += "    <td><span>" + $("#txtPoiDesc").val() + "</span></td>";
         strHTML += "    <td><a onclick='javascript: document.getElementById(\"poidata_" + number + "\").remove();'>delete</a></td>";
         strHTML += "</tr>";
         
@@ -2312,7 +2426,12 @@ function addPoi() {
 
 
 
-
+/**
+ * when the poi management dialog was closed, this function uploads
+ * the pois to the device, when the data was modified...
+ * 
+ * @returns {undefined}
+ */
 async function savePoiData() {
     //variables
     ///////////
@@ -2332,10 +2451,10 @@ async function savePoiData() {
 
                 strJson += "{";
 
-                strJson += "\"Latitude\": " + element.rows[r].cells[0].innerText + ", ";
-                strJson += "\"Longitude\": " + element.rows[r].cells[1].innerText + ", ";
+                strJson += "\"Latitude\": " + $(element.rows[r].cells[0]).children('span').first().text() + ", ";
+                strJson += "\"Longitude\": " + $(element.rows[r].cells[1]).children('span').first().text() + ", ";
                 strJson += "\"Icon\": \"" + $(element.rows[r].cells[2]).children('img').first().attr("src") + "\", ";
-                strJson += "\"Desc\": \"" + encodeURI(element.rows[r].cells[3].innerText) + "\"";
+                strJson += "\"Desc\": \"" + encodeURI($(element.rows[r].cells[3]).children('span').first().text()) + "\"";
 
                 strJson += "}";
             }; 
@@ -2345,12 +2464,315 @@ async function savePoiData() {
 
 
         var oMyBlob = new Blob([strJson], {type : 'application/json'});
-        var file    = new File([oMyBlob], "poidata.json", { type: oMyBlob.type });
+        var file    = new File([oMyBlob], $("#hfUserID").val() + '.json', { type: oMyBlob.type });
 
         dataTransfer.items.add(file);
         fileInput.files = dataTransfer.files;
 
         var fd      = new FormData(form);
-        const res   = await uploadFile(fd, "/");
+        const res   = await uploadFile(fd, "/poidata");
     };
+};
+
+
+
+/**
+ * this function exports the pois as json file
+ * 
+ * @returns {undefined}
+ */
+function exportPOI() {
+    fetch('/poidata/' + $("#hfUserID").val() + '.json', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(response => { 
+        var strJson = JSON.stringify(response);
+
+        console.log(strJson);
+
+        const file = new File([strJson], 'pois.json', {
+            type: 'text/plain'
+        });
+
+        downloadFileContent(file);
+   });
+};
+
+
+
+function importPOI() {
+    $("#fOpenFileDialog").val("");
+    $("#fOpenFileDialog").click();
+};
+
+
+var openFile = function(event) {
+    var input = event.target;
+    var reader = new FileReader();
+    var element = document.getElementById("tbPoiDataBody");
+    var number = element.getElementsByTagName('*').length + 1;
+    
+    reader.onload = function() {
+        //variables
+        ///////////
+        var text = reader.result;
+        var jsn  = JSON.parse(text);
+        var strHTML = $("#tbPoiDataBody").html();
+        
+        for(var n = 0; n < jsn["pois"].length; ++n) {
+            strHTML += "<tr id='poidata_" + (n + number) + "'>";
+            strHTML += "    <td><span>" + jsn["pois"][n].Latitude + "</span></td>";
+            strHTML += "    <td><span>" + jsn["pois"][n].Longitude + "</span></td>";
+            strHTML += "    <td><img src='" + jsn["pois"][n].Icon + "' style='height: 15px;'></td>";
+            strHTML += "    <td><span>" + decodeURI(jsn["pois"][n].Desc) + "</span></td>";
+            strHTML += "    <td><a onclick='javascript: document.getElementById(\"poidata_" + (n + number) + "\").remove(); g_bPoisChanged = true;'>delete</a></td>";
+            strHTML += "</tr>";
+            
+            g_bPoisChanged = true;
+        };
+        
+        $("#tbPoiDataBody").html(strHTML);
+    };
+
+    reader.readAsText(input.files[0]);
+};
+
+
+
+//gps track handling
+////////////////////
+
+
+function showTrackRecordDialog() {
+    $("#dlgNewTrackRecord").modal("show");
+};
+
+
+function startTrackRecording() {
+    if(encodeURI($("#txtTrackName").val()).length < 255) {
+        $.ajax({
+            url: g_strServer + 'api/api.json',
+            type: 'POST',
+            data: '{"chatcmd": "startTrackRecord", ' +
+                  ' "userID": ' + $("#hfUserID").val() + ', ' +
+                  ' "desc": "' + encodeURI($("#txtTrackName").val()) + '", ' +
+                  ' "hash": "' + $("#hfPwdHash").val() + '"}',
+            contentType: 'application/json; charset=utf-8',
+            crossDomain: true,
+            dataType: 'json',
+            async: true,
+            headers: {
+                "accept": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                "Access-Control-Allow-Methods": "GET, POST"
+            },
+            success: function(msg) {
+                console.log(JSON.stringify(msg));
+            },
+            error: function (msg) {
+
+                alert("Unable to activate recording...");
+                console.log(JSON.stringify(msg));
+            }
+        });
+        
+        $("#dlgNewTrackRecord").modal("hide");
+    }
+    else {
+        alert("Track name to long!");
+    };
+};
+
+
+
+function stopTrackRecording() {
+
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        data: '{"chatcmd": "stopTrackRecord", ' +
+              ' "userID": ' + $("#hfUserID").val() + ', ' +
+              ' "hash": "' + $("#hfPwdHash").val() + '"}',
+        contentType: 'application/json; charset=utf-8',
+        crossDomain: true,
+        dataType: 'json',
+        async: true,
+        headers: {
+            "accept": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+            "Access-Control-Allow-Methods": "GET, POST"
+        },
+        success: function(msg) {
+            console.log(JSON.stringify(msg));
+        },
+        error: function (msg) {
+
+            alert("Unable to stop recording...");
+            console.log(JSON.stringify(msg));
+        }
+    });
+};
+
+
+function showTracks() {
+    $("#dlgTrackManagement").modal("show");
+    $("#tbTrackDataBody").html("");
+    
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        data: '{"chatcmd": "getTracks", ' +
+              ' "userID": ' + $("#hfUserID").val() + ', ' +
+              ' "hash": "' + $("#hfPwdHash").val() + '"}',
+        contentType: 'application/json; charset=utf-8',
+        crossDomain: true,
+        dataType: 'json',
+        async: true,
+        headers: {
+            "accept": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+            "Access-Control-Allow-Methods": "GET, POST"
+        },
+        success: function(msg) {
+            //variables
+            ///////////
+            var strHTML = "";
+            
+            console.log(JSON.stringify(msg));
+            
+            for(var i = 0; i < msg["Tracks"].length; ++i) {
+                strHTML += "<tr><td><span>" + msg["Tracks"][i].Time + "</span></td><td><span>" + decodeURI(msg["Tracks"][i].Desc) + "</span></td>" +
+                        "<td><a onclick='javascript: exportTrack(" + msg["Tracks"][i].ID + ", \"" + decodeURI(msg["Tracks"][i].Desc) + "\");'><img style='margin-left: 12px; height: 20px;' src='/images/disk.png' alt='export track'></a>" +
+                        "<td><a onclick='javascript: deleteTrack(" + msg["Tracks"][i].ID + ");'><img style='margin-left: 12px; height: 20px;' src='/images/trash.png' alt='delete track'></a>" +
+                        "</tr>";
+            };
+            
+            $("#tbTrackDataBody").html(strHTML);
+        },
+        error: function (msg) {
+
+            alert("Unable to load tracks...");
+            console.log(JSON.stringify(msg));
+        }
+    });
+};
+
+
+
+function deleteTrack(trackID) {
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        data: '{"chatcmd": "deleteTrack", ' +
+              ' "userID": ' + $("#hfUserID").val() + ', ' +
+              ' "TrackID": ' + trackID + ', ' +
+              ' "hash": "' + $("#hfPwdHash").val() + '"}',
+        contentType: 'application/json; charset=utf-8',
+        crossDomain: true,
+        dataType: 'json',
+        async: true,
+        headers: {
+            "accept": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+            "Access-Control-Allow-Methods": "GET, POST"
+        },
+        success: function(msg) {
+            
+            console.log(JSON.stringify(msg));
+           
+            //reload dialog
+            showTracks();
+        },
+        error: function (msg) {
+
+            alert("Unable to delete track...");
+            console.log(JSON.stringify(msg));
+        }
+    });
+};
+
+
+
+function exportTrack(trackID, strName) {
+    $.ajax({
+        url: g_strServer + 'api/api.json',
+        type: 'POST',
+        data: '{"chatcmd": "getTrackData", ' +
+              ' "userID": ' + $("#hfUserID").val() + ', ' +
+              ' "TrackID": ' + trackID + ', ' +
+              ' "hash": "' + $("#hfPwdHash").val() + '"}',
+        contentType: 'application/json; charset=utf-8',
+        crossDomain: true,
+        dataType: 'json',
+        async: true,
+        headers: {
+            "accept": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+            "Access-Control-Allow-Methods": "GET, POST"
+        },
+        success: function(msg) {
+            //variables
+            ///////////
+            var strGPX = "";
+            
+            console.log(JSON.stringify(msg));
+            
+            
+            //create gpx header
+            strGPX  = '<?xml version="1.0"?>' +
+                      '<gpx version="1.1" creator="LoRa-Link" ' +
+                      'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+                      'xmlns:ogr="https://github.com/trlink/LoRaLink" ' +
+                      'xmlns="http://www.topografix.com/GPX/1/1" ' +
+                      'xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"> ' + 
+                      '<trk><name>' + strName + '</name><trkseg>';
+            
+            for(var i = 0; i < msg["Waypoints"].length; ++i) {
+                strGPX += '<trkpt lat="' + msg["Waypoints"][i].Lat + '" lon="' + msg["Waypoints"][i].Lon + '">'
+                strGPX += '<ele>' + msg["Waypoints"][i].Alt + '</ele>';
+                strGPX += '<time>' + msg["Waypoints"][i].Time + '</time>';
+                strGPX += '</trkpt>';
+            };
+            
+            strGPX += "</trkseg></trk></gpx>";
+            
+            
+            const file = new File([strGPX], 'track.gpx', {
+                type: 'text/plain'
+            });
+            
+            downloadFileContent(file);
+        },
+        error: function (msg) {
+
+            alert("Unable to load tracks...");
+            console.log(JSON.stringify(msg));
+        }
+    });
+};
+
+
+
+function downloadFileContent(file) {
+    //variables
+    ///////////
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(file);
+
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
 };

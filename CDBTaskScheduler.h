@@ -13,7 +13,7 @@
 
 //defines
 /////////
-//#define SCHEDULER_DEBUG
+#define SCHEDULER_DEBUG
 #define TASK_SCHEDULER_TIME       (5 * 1000)
 
 

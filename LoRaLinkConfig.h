@@ -6,18 +6,19 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "helper.h"
+#include "HardwareConfig.h"
 
 
 
 //defines
 /////////
-#define CONFIG_FILE_WIFI_AP         "/wifiAP.jsn"
-#define CONFIG_FILE_WIFI_CLNT       "/wifiClnt.jsn"
-#define CONFIG_FILE_ADMIN           "/admin.jsn"
-#define CONFIG_FILE_DEVICE          "/device.jsn"
-#define CONFIG_FILE_IPLINK          "/iplink.jsn"
-#define CONFIG_FILE_MODEM           "/modem.jsn"
-#define CONFIG_FILE_DDNS            "/ddns.jsn"
+#define CONFIG_FILE_WIFI_AP         (char*)(String(LORALINK_CONFIG_ROOT) + String("/wifiAP.jsn")).c_str()
+#define CONFIG_FILE_WIFI_CLNT       (char*)(String(LORALINK_CONFIG_ROOT) + String("/wifiClnt.jsn")).c_str()
+#define CONFIG_FILE_ADMIN           (char*)(String(LORALINK_CONFIG_ROOT) + String("/admin.jsn")).c_str()
+#define CONFIG_FILE_DEVICE          (char*)(String(LORALINK_CONFIG_ROOT) + String("/device.jsn")).c_str()
+#define CONFIG_FILE_IPLINK          (char*)(String(LORALINK_CONFIG_ROOT) + String("/iplink.jsn")).c_str()
+#define CONFIG_FILE_MODEM           (char*)(String(LORALINK_CONFIG_ROOT) + String("/modem.jsn")).c_str()
+#define CONFIG_FILE_DDNS            (char*)(String(LORALINK_CONFIG_ROOT) + String("/ddns.jsn")).c_str()
 
 
 //possible device types

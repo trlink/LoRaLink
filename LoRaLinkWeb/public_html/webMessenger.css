@@ -260,3 +260,41 @@
 .dlgPoiManagement {
     
 }
+
+
+#tbPoiData {  
+    width: 100%;
+}
+
+#tbPoiData thead {
+    background-color: lightgray;
+    font-size: 12px;
+    border-bottom: 1px solid grey;
+    border-right: 1px solid grey;
+}
+
+#tbPoiData tbody span {
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+};
+
+
+#tbTrackData {  
+    width: 100%;
+}
+
+
+#tbTrackData thead {
+    background-color: lightgray;
+    font-size: 12px;
+    border-bottom: 1px solid grey;
+    border-right: 1px solid grey;
+}
+
+#tbTrackData tbody span {
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+};
+

@@ -67,16 +67,17 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                           GPS Tracking
                         </a>
                         <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(0);">Enable TX</a>
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(1);">Enable - Emergency TX</a>
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); disableGpsTracking();">Disable TX</a> 
+                            <a id="mnuEnableGpsTracking" class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(0);">Enable TX</a>
+                            <a id="mnuEnableEmergGpsTracking" class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); enableGpsTracking(1);">Enable - Emergency TX</a>
+                            <a id="mnuDisableGpsTracking" class="dropdown-item disabled" href="#" onclick="javascript: $('.navbar-toggler').click(); disableGpsTracking();">Disable TX</a> 
                             <div class="dropdown-divider"></div>
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showRadar();">Show Radar</a> 
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView();">Show Map</a> 
                             <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showManagePOI();">Manage POI's</a> 
                             <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView();">Record Track</a> 
-                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView();">Show Track</a> 
+                            <a id="mnuRecordTrack" class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showTrackRecordDialog();">Record Track</a> 
+                            <a id="mnuRecordTrackStop" class="dropdown-item disabled" href="#" onclick="javascript: $('.navbar-toggler').click(); stopTrackRecording();">Stop Track Recording</a> 
+                            <a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showTracks();">Show Track</a> 
                         </div>
                     </li>
                 </ul>
@@ -338,7 +339,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
             </div>
         </div>
         
-        
+        <!-- POI Management dialog -->
         <div id="dlgPoiManagement" class="modal fade dlgPoiManagement" tabindex="-1" role="dialog" aria-labelledby="PoiManagementModalLongTitle" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
@@ -348,21 +349,21 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" style="height: 300px; overflow-y: auto;">
                         <table id='tbPoiData'>
                             <thead>
-                                <td>Latitude</td>
-                                <td>Longitude</td>
-                                <td>Icon</td>
-                                <td>Description</td>
-                                <td></td>
+                                <td style="width: 75px;">Latitude</td>
+                                <td style="width: 75px;">Longitude</td>
+                                <td style="width: 72px;">Icon</td>
+                                <td style="width: 120px;">Description</td>
+                                <td style="width: 52px;"></td>
                             </thead>
                             <tbody id='tbPoiDataBody'>
                             </tbody>
                             <tfoot>
-                                <td><input type="text" class="form-control" id="txtPoiLatitude" aria-describedby="" placeholder="" maxlength="10" autocomplete="off"></td>
-                                <td><input type="text" class="form-control" id="txtPoiLongitude" aria-describedby="" placeholder="" maxlength="10" autocomplete="off"></td>
-                                <td>
+                                <td><input style="width: 75px;" type="number" class="form-control" id="txtPoiLatitude" aria-describedby="" placeholder="" maxlength="10" autocomplete="off"></td>
+                                <td><input style="width: 75px;" type="number" class="form-control" id="txtPoiLongitude" aria-describedby="" placeholder="" maxlength="10" autocomplete="off"></td>
+                                <td style="width: 72px;">
                                     <button class="btn btn-success  dropdown-toggle" 
                                             type="button" 
                                             id="cmbPoiIcon" 
@@ -378,18 +379,78 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                                         <li class="dropdown-item"><a onclick="$('#cmbPoiIcon').attr('data-selected', '/images/marker-icon-red.png');"><img src="/images/marker-icon-red.png" height="15"> red</a></li> 
                                     </ul> 
                                 </td>
-                                <td><input type="text" class="form-control" id="txtPoiDesc" aria-describedby="" placeholder="" maxlength="250" autocomplete="off"></td>
-                                <td><button id="btnAddPoi" type="button" class="btn btn-primary" onclick="javascript: addPoi();">add</button></td>
+                                <td style="width: 120px;"><input type="text" class="form-control" id="txtPoiDesc" aria-describedby="" placeholder="" maxlength="250" autocomplete="off"></td>
+                                <td style="width: 52px;"><button id="btnAddPoi" type="button" class="btn btn-primary" onclick="javascript: addPoi();">add</button></td>
                             </tfoot>
                         </table>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="javascript: importPOI();">Import POI's</button>
+                        <button type="button" class="btn btn-secondary" onclick="javascript: exportPOI();">Export POI's</button>
                     </div>
                 </div>
             </div>
         </div>
         
         
+        <!-- Track recording dialog -->
+        <div id="dlgNewTrackRecord" class="modal fade dlgNewTrackRecord" tabindex="-1" role="dialog" aria-labelledby="NewTrackRecordModalLongTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="NewTrackRecordModalLongTitle">New Track Recording</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group" style="margin-left: 2px; margin-right:2px;">
+                            <label id="lblTrackName" for="txtTrackName">Track Name:</label>
+                            <input type="text" class="form-control" id="txtTrackName" aria-describedby="lblTrackName" placeholder="" maxlength="255" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button id="btnStartRecord" type="button" class="btn btn-primary" onclick="javascript: startTrackRecording();">Start Recording</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+        <div id="dlgTrackManagement" class="modal fade dlgTrackManagement" tabindex="-1" role="dialog" aria-labelledby="TrackManagementModalLongTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="TrackManagementModalLongTitle">Manage Saved Tracks</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="height: 300px; overflow-y: auto;">
+                        <table id='tbTrackData' style="width: 100%;">
+                            <thead>
+                                <td style="width: 120px;">Date</td>
+                                <td style="">Name</td>
+                                <td style=""></td>
+                                <td style=""></td>
+                            </thead>
+                            <tbody id='tbTrackDataBody'>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- form to upload files to the server -->
         <form id="frmFileUpload" enctype="multipart/form-data" method="post" style="display: none;">
             <input type="file" name="file" id="file">
         </form>
+        
+        <!-- input to read files from clients disk -->
+        <input id="fOpenFileDialog" type='file' accept='application/json' onchange='openFile(event)' style="display: none;">
     </body>
 </html>

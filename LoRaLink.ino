@@ -95,6 +95,10 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   int                   g_nLocationTrackingType   = GPS_POSITION_TYPE_NORMAL;
   TaskHandle_t          g_Core0TaskHandle3;
   bool                  g_bHaveData               = false;
+  bool                  g_bRecordTrack            = false;
+  uint32_t              g_dwRecordTrackID         = 0;
+  long                  g_lTrackRecTimer          = 0;
+  
 
   //function predecl
   //////////////////
@@ -612,6 +616,350 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           delete pDatabase;
         };
 
+        if(strcmp_P(doc[F("chatcmd")], PSTR("startTrackRecord")) == 0)
+        {
+          //variables
+          ///////////
+          char                szDatabaseFile[50];
+          CWSFFileDB          *pDatabase;
+          char                *szDesc = new char[256];
+          uint32_t            dwUserID = (uint32_t)doc[F("userID")];
+          uint32_t            dwTime   = ClockPtr->getUnixTimestamp();
+          void                *pInsert[TRACKHEADTABLE_SIZE + 1];
+          sDBTaskSendFile     sTrackRec;
+          byte                *bData = new byte[201];
+
+          memset(bData, 0, 200);
+          memset(szDesc, 0, 255);
+          memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+          sprintf((char*)&szDatabaseFile, TRACKHEADTABLE_FILE);
+
+          strcpy(szDesc, (const char*)doc[F("desc")]);
+          
+          if((g_bRecordTrack == false) && (g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_RECORD_TRACK) == 0))
+          {
+            Serial.print(F("Start track rec for: "));
+            Serial.print(dwUserID);
+            Serial.print(F(" desc: "));
+            Serial.println(szDesc);
+            
+            pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackHeadTableDef, TRACKHEADTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+            pDatabase->open();
+    
+            if(pDatabase->isOpen() == true)
+            {
+              pInsert[0] = (void*)&dwUserID;
+              pInsert[1] = (void*)&dwTime;
+              pInsert[2] = (void*)szDesc;
+
+              pDatabase->insertData(pInsert);
+              g_dwRecordTrackID = pDatabase->getLastInsertPos();
+              
+
+              sTrackRec.dwFileID      = g_dwRecordTrackID;
+              sTrackRec.dwReleaseTask = 0;
+
+              memcpy(bData, (void*)&sTrackRec, sizeof(sDBTaskSendFile));
+
+              g_pDbTaskScheduler->addSchedule(DBTASK_RECORD_TRACK, LORALINK_POSITION_INTERVAL_SECONDS, 0, bData, true);
+
+              g_bRecordTrack = true;
+              
+              docResp["response"] = String(F("OK"));
+              nRespCode = 200;
+            }
+            else
+            {
+              docResp["response"] = String(F("ERR"));
+              nRespCode = 500;
+            };
+    
+            delete pDatabase;
+          }
+          else
+          {
+            docResp["response"] = String(F("ERR"));
+            nRespCode = 500;
+          };
+
+          delete szDesc;
+          delete bData;
+        };
+
+        if(strcmp_P(doc[F("chatcmd")], PSTR("getTracks")) == 0)
+        {
+          //variables
+          ///////////
+          char                szDatabaseFile[50];
+          CWSFFileDB          *pDatabase;
+          CWSFFileDBRecordset *pRecordset;
+          char                *buffer = new char[301];
+          char                *szDesc = new char[256];
+          uint32_t            dwTime;
+          uint32_t            dwUserID;
+          bool                bHadEntry = false;
+          DateTime            dtTime;
+
+
+          memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+          sprintf((char*)&szDatabaseFile, TRACKHEADTABLE_FILE);
+
+          pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackHeadTableDef, TRACKHEADTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+          pDatabase->open();
+
+          memset(buffer, 0, 200);
+          strcpy_P(buffer, PSTR("{\"Tracks\": ["));
+          resp->print(buffer);
+    
+          if(pDatabase->isOpen() == true)
+          {
+            pRecordset = new CWSFFileDBRecordset(pDatabase);
+
+            while(pRecordset->haveValidEntry() == true)
+            {
+              pRecordset->getData(0, (void*)&dwUserID, sizeof(uint32_t));
+
+              if(dwUserID == (uint32_t)doc[F("userID")])
+              {
+                memset(szDesc, 0, 255);
+                
+                pRecordset->getData(1, (void*)&dwTime, sizeof(uint32_t));
+                pRecordset->getData(2, (void*)szDesc, 255);
+
+                dtTime = DateTime((time_t)dwTime);
+                
+                if(bHadEntry == true)
+                {
+                  memset(buffer, 0, 300);
+                  sprintf_P(buffer, PSTR(", "));
+                  resp->print(buffer);
+                };
+
+                memset(buffer, 0, 300);
+                sprintf_P(buffer, PSTR("{\"Time\": \"%4i-%02i-%02i %02i:%02i:%02i\", \"Desc\": \"%s\", \"ID\": %u}"), dtTime.year(), dtTime.month(), dtTime.day(), dtTime.hour(), dtTime.minute(), dtTime.second(), szDesc, pRecordset->getRecordPos());
+                resp->println(buffer);
+
+                bHadEntry = true;
+              };
+              
+              ResetWatchDog();
+
+              pRecordset->moveNext();
+            };
+
+            delete pRecordset;
+          };
+            
+          // we are done, send the footer
+          memset(buffer, 0, 300);
+          strcpy_P(buffer, PSTR("]}"));
+          resp->println(buffer);
+        
+          delete pDatabase;
+          delete buffer;
+          delete szDesc;
+
+          return;
+        };
+
+        if(strcmp_P(doc[F("chatcmd")], PSTR("getTrackData")) == 0)
+        {
+          //variables
+          ///////////
+          char                szDatabaseFile[50];
+          CWSFFileDB          *pDatabase;
+          CWSFFileDBRecordset *pRecordset;
+          char                *buffer = new char[201];
+          float               fLat, fLon, fAlt;
+          uint32_t            dwTime;
+          uint32_t            dwTrackID;
+          bool                bHadEntry = false;
+          DateTime            dtTime;
+          
+
+          if(g_bRecordTrack == false)
+          {
+            memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+            sprintf((char*)&szDatabaseFile, TRACKWAYPOINTTABLE_FILE);
+
+            pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackWaypointTableDef, TRACKWAYPOINTTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+            pDatabase->open();
+
+            memset(buffer, 0, 200);
+            strcpy_P(buffer, PSTR("{\"Waypoints\": ["));
+            resp->print(buffer);
+    
+            if(pDatabase->isOpen() == true)
+            {
+              pRecordset = new CWSFFileDBRecordset(pDatabase);
+
+              while(pRecordset->haveValidEntry() == true)
+              {
+                pRecordset->getData(0, (void*)&dwTrackID, sizeof(uint32_t));
+
+                if(dwTrackID == (uint32_t)doc[F("TrackID")])
+                {
+                  pRecordset->getData(1, (void*)&fLat, sizeof(float));
+                  pRecordset->getData(2, (void*)&fLon, sizeof(float));
+                  pRecordset->getData(3, (void*)&fAlt, sizeof(float));
+                  pRecordset->getData(4, (void*)&dwTime, sizeof(uint32_t));
+
+                  dtTime = DateTime((time_t)dwTime);
+                  
+                  if(bHadEntry == true)
+                  {
+                    memset(buffer, 0, 200);
+                    sprintf_P(buffer, PSTR(", "));
+                    resp->print(buffer);
+                  };
+
+                  memset(buffer, 0, 200);
+                  sprintf_P(buffer, PSTR("{\"Lat\": %f, \"Lon\": %f, \"Alt\": %f, \"Time\": \"%4i-%02i-%02i %02i:%02i:%02i\"}"), fLat, fLon, fAlt, dtTime.year(), dtTime.month(), dtTime.day(), dtTime.hour(), dtTime.minute(), dtTime.second());
+                  resp->println(buffer);
+
+                  bHadEntry = true;
+                };
+                
+                ResetWatchDog();
+
+                pRecordset->moveNext();
+              };
+
+              delete pRecordset;
+            };
+
+
+            // we are done, send the footer
+            memset(buffer, 0, sizeof(buffer));
+            strcpy_P(buffer, PSTR("]}"));
+            resp->println(buffer);
+            
+            delete pDatabase;
+            delete buffer;
+
+            return;
+          }
+          else
+          {
+            //cant load data, when recording is active, since
+            //the file is opened and closed after every waypoint
+            //so in the end one operation will fail, when the
+            //same file is opened twice...
+            
+            docResp["response"] = String(F("ERR"));
+            nRespCode = 500;
+          };
+
+          delete buffer;
+        };
+
+        if(strcmp_P(doc[F("chatcmd")], PSTR("stopTrackRecord")) == 0)
+        {         
+          if(g_bRecordTrack == true)
+          {
+            g_pDbTaskScheduler->removeSchedule(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_RECORD_TRACK), true);
+
+            g_dwRecordTrackID = 0;
+            g_bRecordTrack    = false;
+  
+            docResp["response"] = String(F("OK"));
+            nRespCode = 200;
+          }
+          else
+          {
+            docResp["response"] = String(F("ERR"));
+            nRespCode = 500;
+          };
+        };
+
+        if(strcmp_P(doc[F("chatcmd")], PSTR("deleteTrack")) == 0)
+        {
+          //variables
+          ///////////
+          char                szDatabaseFile[50];
+          CWSFFileDB          *pDatabase;
+          CWSFFileDBRecordset *pRecordset;
+          uint32_t            dwTrackID;
+          
+          if(g_bRecordTrack == false)
+          {
+            memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+            sprintf((char*)&szDatabaseFile, TRACKHEADTABLE_FILE);
+  
+            pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackHeadTableDef, TRACKHEADTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+            pDatabase->open();
+      
+            if(pDatabase->isOpen() == true)
+            {
+              pRecordset = new CWSFFileDBRecordset(pDatabase, (uint32_t)doc[F("TrackID")]);
+  
+              if(pRecordset->haveValidEntry() == true)
+              {
+                pRecordset->remove();
+
+                delete pRecordset;
+                delete pDatabase;
+
+                //delete waypoints
+                memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+                sprintf((char*)&szDatabaseFile, TRACKWAYPOINTTABLE_FILE);
+    
+                pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackWaypointTableDef, TRACKWAYPOINTTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+                pDatabase->open();
+                
+                if(pDatabase->isOpen() == true)
+                {
+                  pRecordset = new CWSFFileDBRecordset(pDatabase);
+    
+                  while(pRecordset->haveValidEntry() == true)
+                  {
+                    pRecordset->getData(0, (void*)&dwTrackID, sizeof(uint32_t));
+    
+                    if(dwTrackID == (uint32_t)doc[F("TrackID")])
+                    {
+                      pRecordset->remove();
+                    };
+
+                    ResetWatchDog();
+
+                    pRecordset->moveNext();
+                  };
+
+                  delete pRecordset;
+                };
+
+                docResp["response"] = String(F("OK"));
+                nRespCode = 200;
+              }
+              else 
+              {
+                delete pRecordset;
+
+                docResp["response"] = String(F("ERR"));
+                nRespCode = 500;
+              };
+
+              delete pDatabase;
+            }
+            else 
+            {
+              docResp["response"] = String(F("ERR"));
+              nRespCode = 500;
+
+              delete pDatabase;
+            };
+          }
+          else
+          {
+            //cant load data, when recording is active, since
+            //the file is opened and closed after every waypoint
+            //so in the end one operation will fail, when the
+            //same file is opened twice...
+            
+            docResp["response"] = String(F("ERR"));
+            nRespCode = 500;
+          };
+        };
       #endif
 
       //functions for which the internal clock is neccessary!
@@ -999,9 +1347,11 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       docResp["bConnected"] = LLSystemState.bConnected;
       docResp["szData"]     = szData;
       docResp["response"]   = String(F("OK"));
+      docResp["lUptimeSec"] = millis() / 1000;
 
       #if LORALINK_HARDWARE_GPS == 1
         docResp["bHaveGPS"] = true;
+        docResp["bRecordTrack"]     = g_bRecordTrack;
         docResp["bValidSignal"]     = LLSystemState.bValidSignal;
         docResp["fLatitude"]        = LLSystemState.fLatitude;
         docResp["fLongitude"]       = LLSystemState.fLongitude;
@@ -1158,9 +1508,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     
           if(routing != NULL)
           {
-            Serial.print(F("getRoutes() return route for"));
-            Serial.println(routing->dwDeviceID);
-            
             memset(buffer, 0, sizeof(buffer));
             sprintf_P((char*)&buffer, PSTR("["));
             resp->println(buffer);
@@ -3336,7 +3683,7 @@ void setup()
     LLSystemState.fAltitude     = 0;
     LLSystemState.dwLastValid   = 0;
 
-    xTaskCreatePinnedToCore(GpsDataTask, "GpsDataTask", 2048, NULL, 1, &g_Core0TaskHandle3, 0);
+    xTaskCreatePinnedToCore(GpsDataTask, "GpsDataTask", 3000, NULL, 1, &g_Core0TaskHandle3, 0);
     
 
     //check if there is a running tracking
@@ -3357,6 +3704,28 @@ void setup()
       g_nLocationTrackingType   = task.dwContactID & 0xFF; //used as type
 
       Serial.println(F("Location tracking active!"));
+    };
+
+    //check if there is a running track recording
+    //this is an enabler only, when the device crashes or looses power, 
+    //so it has no handler...
+    if(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_RECORD_TRACK) != 0)
+    {
+      //variables
+      ///////////
+      sDBTaskSendFile  task;  
+      byte             bData[40];
+
+      memset(bData, 0, sizeof(bData));
+
+      g_pDbTaskScheduler->getTaskData(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_RECORD_TRACK), (byte*)&bData, sizeof(bData));
+
+      memcpy(&task, bData, sizeof(sDBTaskSendFile));
+      
+      g_bRecordTrack            = true;
+      g_dwRecordTrackID         = task.dwFileID;
+      
+      Serial.println(F("Track recording active!"));
     };
     
   #endif
@@ -3612,6 +3981,13 @@ void ModemDataTask(void *pParam)
     float fLat = 0, fLon = 0, fAlt = 0, fSpeed = 0, fCourse = 0;
     int nSat, nHDOP;
     DateTime dtClock;
+    char          szDatabaseFile[50];
+    CWSFFileDB    *pDatabase;
+    void          *pInsert[TRACKWAYPOINTTABLE_SIZE + 1];
+    uint32_t      dwTime;
+    
+    memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+    sprintf((char*)&szDatabaseFile, TRACKWAYPOINTTABLE_FILE);
 
     
     while(true)
@@ -3731,6 +4107,35 @@ void ModemDataTask(void *pParam)
             {
               DeviceConfig.fLocN = LLSystemState.fLatitude;
               DeviceConfig.fLocE = LLSystemState.fLongitude;  
+            };
+
+
+            //if track recording is active, write data to table
+            if(g_bRecordTrack == true)
+            {
+              if(g_lTrackRecTimer <= millis())
+              {
+                //write waypoint every 3min
+                g_lTrackRecTimer = millis() + (1000 * 60 * 3);
+
+                pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackWaypointTableDef, TRACKWAYPOINTTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+                pDatabase->open();
+        
+                if(pDatabase->isOpen() == true)
+                {
+                  dwTime     = ClockPtr->getUnixTimestamp();
+                  
+                  pInsert[0] = (void*)&g_dwRecordTrackID;
+                  pInsert[1] = (void*)&LLSystemState.fLatitude;
+                  pInsert[2] = (void*)&LLSystemState.fLongitude;
+                  pInsert[3] = (void*)&LLSystemState.fAltitude;
+                  pInsert[4] = (void*)&dwTime;
+    
+                  pDatabase->insertData(pInsert);
+                };
+
+                delete pDatabase;
+              };
             };
           };
         }

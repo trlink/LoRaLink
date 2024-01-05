@@ -3,7 +3,7 @@
 
   //general config
   ////////////////
-  #define LORALINK_VERSION_STRING               "v2.1"
+  #define LORALINK_VERSION_STRING               "v2.2"
   #define LORALINK_MAX_MESSAGE_SIZE             1500
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
@@ -46,10 +46,11 @@
   //can be SD or SPIFFS
   /////////////////////
   #define LORALINK_CONFIG_FS      SD
+  #define LORALINK_CONFIG_ROOT    "/config"
   #define LORALINK_WEBAPP_FS      SD
   #define LORALINK_WEBAPP_ROOT    ""
   #define LORALINK_DATA_FS        SD
-  #define LORALINK_DATA_ROOT      ""
+  #define LORALINK_DATA_ROOT      "/data"
   #define LORALINK_FIRMWARE_FS    SD
   
 
@@ -74,7 +75,7 @@
     #endif
 
     
-    #define LORALINK_HARDWARE_NAME  "Heltec ESP32 (SX1262) WiFi LoRa 433MHz"
+    #define LORALINK_HARDWARE_NAME  F("Heltec ESP32 (SX1262) WiFi LoRa 433MHz")
     #define LORALINK_FIRMWARE_FILE  "/HeltecV3.bin"
     #define LORALINK_HARDWARE_LORA  1       //device has a lora modem
     
@@ -175,7 +176,7 @@
     
 
 
-    #define LORALINK_HARDWARE_NAME  "ESP32 WiFi LoRa (SX1278) 433MHz"
+    #define LORALINK_HARDWARE_NAME  F("ESP32 WiFi LoRa (SX1278) 433MHz")
     #define LORALINK_FIRMWARE_FILE  "/ESP.bin"
     #define LORALINK_HARDWARE_LORA  1       //device has a lora modem
 
@@ -268,7 +269,7 @@
     
 
 
-    #define LORALINK_HARDWARE_NAME  "ESP32 WiFi LoRa (SX1278) 433MHz"
+    #define LORALINK_HARDWARE_NAME  F("ESP32 WiFi LoRa (SX1278) 433MHz")
     #define LORALINK_FIRMWARE_FILE  "/ESP.bin"
     #define LORALINK_HARDWARE_LORA  0       //device has no lora modem
 
@@ -366,7 +367,7 @@
     
 
 
-    #define LORALINK_HARDWARE_NAME  "T-Beam WiFi LoRa (SX1276) 433MHz"
+    #define LORALINK_HARDWARE_NAME  F("T-Beam WiFi LoRa (SX1276) 433MHz")
     #define LORALINK_FIRMWARE_FILE  "/TBeam.bin"
     #define LORALINK_HARDWARE_LORA  1       //device has a lora modem
 

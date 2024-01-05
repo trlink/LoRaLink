@@ -178,7 +178,7 @@ const int nChatMessageTableDef[] =
 
 
 
-#define SHOUTOUTTABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/shoutout.tbl")).c_str()
+#define SHOUTOUTTABLE_FILE            (char*)(String(LORALINK_DATA_ROOT) + String("/shoutout.tbl")).c_str()
 #define SHOUTOUTTABLE_SIZE            5
 #define SHOUTOUTTABLE_BLOCKSIZE       151
 
@@ -194,7 +194,30 @@ const int nShoutOutTableDef[] =
 
 
 
+#define TRACKHEADTABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/trackh.tbl")).c_str()
+#define TRACKHEADTABLE_SIZE 3
 
+
+const int nTrackHeadTableDef[] =
+{
+  sizeof(uint32_t),                 //user id
+  sizeof(uint32_t),                 //start time
+  255                               //track name
+};
+
+
+#define TRACKWAYPOINTTABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/trackhwp.tbl")).c_str()
+#define TRACKWAYPOINTTABLE_SIZE 5
+
+
+const int nTrackWaypointTableDef[] =
+{
+  sizeof(uint32_t),                 //track head id
+  sizeof(float),                    //lat
+  sizeof(float),                    //long
+  sizeof(float),                    //elevation
+  sizeof(uint32_t)                  //timestamp
+};
 
 
 //definitions
