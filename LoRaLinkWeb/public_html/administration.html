@@ -76,15 +76,15 @@
                     <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
 
                         <button class="nav-link active" id="v-pills-admin-tab" data-toggle="pill" data-target="#v-pills-admin" type="button" role="tab" aria-controls="v-pills-admin" aria-selected="true">Admin-User</button>
-                        <button class="nav-link" id="v-pills-ap-tab" data-toggle="pill" data-target="#v-pills-ap" role="tab" type="button" aria-controls="v-pills-ap" aria-selected="false">Access Point</button>
-                        <button class="nav-link" id="v-pills-wifi-tab" data-toggle="pill" data-target="#v-pills-wifi" role="tab" type="button" aria-controls="v-pills-wifi" aria-selected="false">WiFi Access</button>
-                        <button class="nav-link" id="v-pills-link-tab" data-toggle="pill" data-target="#v-pills-link" role="tab" type="button" aria-controls="v-pills-link" aria-selected="false">LoRa-Link</button>        
-                        <button class="nav-link" id="v-pills-settings-tab" data-toggle="pill" data-target="#v-pills-settings" role="tab" type="button" aria-controls="v-pills-settings" aria-selected="false">Settings</button>
+                        <button class="nav-link" id="v-pills-ap-tab" data-toggle="pill" data-target="#v-pills-ap" role="tab" type="button" aria-controls="v-pills-ap" aria-selected="false" onclick="javascript: getWiFiApConfig();">Access Point</button>
+                        <button class="nav-link" id="v-pills-wifi-tab" data-toggle="pill" data-target="#v-pills-wifi" role="tab" type="button" aria-controls="v-pills-wifi" aria-selected="false" onclick="javascript: getWiFiConfig(); getDDNSConfig(); ">WiFi Access</button>
+                        <button class="nav-link" id="v-pills-link-tab" data-toggle="pill" data-target="#v-pills-link" role="tab" type="button" aria-controls="v-pills-link" aria-selected="false" onclick="javascript: getLinkConfig();">LoRa-Link</button>        
+                        <button class="nav-link" id="v-pills-settings-tab" data-toggle="pill" data-target="#v-pills-settings" role="tab" type="button" aria-controls="v-pills-settings" aria-selected="false" onclick="javascript: getDeviceConfig();">Settings</button>
                         <button class="nav-link" id="v-pills-user-tab" data-toggle="pill" data-target="#v-pills-user" role="tab" type="button" aria-controls="v-pills-user" aria-selected="false" onclick="javascript: getUserList();">User Management</button>
-                        <button class="nav-link" id="v-pills-lora-tab" data-toggle="pill" data-target="#v-pills-lora" role="tab" type="button" aria-controls="v-pills-lora" aria-selected="false">LoRa TRX Settings</button>
+                        <button class="nav-link" id="v-pills-lora-tab" data-toggle="pill" data-target="#v-pills-lora" role="tab" type="button" aria-controls="v-pills-lora" aria-selected="false" onclick="javascript: getModemConfig();">LoRa TRX Settings</button>
                         <button class="nav-link" id="v-pills-nodes-tab" data-toggle="pill" data-target="#v-pills-nodes" role="tab" type="button" aria-controls="v-pills-nodes" aria-selected="false" onclick="javascript: getNodeList();">Heard Nodes</button>
                         <button class="nav-link" id="v-pills-routes-tab" data-toggle="pill" data-target="#v-pills-routes" role="tab" type="button" aria-controls="v-pills-routes" aria-selected="false" onclick="javascript: getRouting();">Routing</button>
-                        <button class="nav-link" id="v-pills-files-tab" data-toggle="pill" data-target="#v-pills-files" role="tab" type="button" aria-controls="v-pills-files" aria-selected="false">Files</button>
+                        <button class="nav-link" id="v-pills-files-tab" data-toggle="pill" data-target="#v-pills-files" role="tab" type="button" aria-controls="v-pills-files" aria-selected="false" onclick="javascript: getFilesystemConfig();">Files</button>
                         <button class="nav-link" id="v-pills-device-tab" data-toggle="pill" data-target="#v-pills-device" role="tab" type="button" aria-controls="v-pills-device" aria-selected="false">Device</button>
                     </div>
                 </div>

@@ -56,8 +56,6 @@ struct sLoRaWiFiCfg
   bool bHideNetwork;
   int  nChannel;
   //non volatile (helper variables)
-  int  nAvailNetworks;
-  char **szNetwork;
   bool bWiFiEnabled;
 };
 

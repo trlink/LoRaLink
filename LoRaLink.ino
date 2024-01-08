@@ -27,7 +27,7 @@
 
 //defines
 /////////
-//#define WEBAPIDEBUG
+#define WEBAPIDEBUG
 //#define WEBAPIDEBUGX
 //#define TCPAPIDEBUG
 //#define TCPAPIERROR
@@ -144,7 +144,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   int                     g_nShoutoutCount      = 0;
   int                     g_nWebserverCheck     = 0;
   long                    g_lWiFiShutdownTimer  = 0;
-
+  bool                    g_bWiFiConnected      = false;
+  
   //function predecl
   //////////////////
   void ConnectToLoraLinkServer();
@@ -158,7 +159,10 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     //variables
     ///////////
     IPAddress IP;
+    long      lTimeout;
 
+    g_bWiFiConnected = false;
+    
     WiFi.mode(WIFI_OFF);
 
     LoRaWiFiApCfg.bWiFiEnabled = true;
@@ -213,6 +217,17 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       {
         WiFi.begin(LoRaWiFiCfg.szWLANSSID);
       };
+
+      
+      lTimeout = millis() +  30000;
+
+      //wait till wifi is connected
+      while((g_bWiFiConnected == false) && (millis() < lTimeout));
+      {
+        delay(250);
+        
+        ResetWatchDog();
+      };
     };
   };
   
@@ -227,15 +242,10 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     
     while(true)
     {
-      LLSystemState.lMemFreeBlinkTask     = uxTaskGetStackHighWaterMark(NULL);
+      LLSystemState.lMemFreeWebServerTask     = uxTaskGetStackHighWaterMark(NULL);
 
       g_dnsServer.processNextRequest();
   
-      if(strlen(DynDNSConfig.szProvider) > 0)
-      {
-        EasyDDNS.update(120000);
-      };
-
       HandleWebserver();
 
       delay(1);
@@ -406,11 +416,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
   void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info)
   {
-    #ifdef TCPAPIDEBUG
-      Serial.print(F("WiFi connected: IP address: "));
-      Serial.println(IPAddress(info.got_ip.ip_info.ip.addr));
-    #endif
-
+    Serial.print(F("WiFi connected: IP address: "));
+    Serial.println(IPAddress(info.got_ip.ip_info.ip.addr));
+  
     sprintf_P(LoRaWiFiCfg.szDevIP, PSTR("%i.%i.%i.%i"), IPAddress(info.got_ip.ip_info.ip.addr)[0], IPAddress(info.got_ip.ip_info.ip.addr)[1], IPAddress(info.got_ip.ip_info.ip.addr)[2], IPAddress(info.got_ip.ip_info.ip.addr)[3]);
 
     ResetWatchDog();
@@ -420,7 +428,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     {
       WiFiUDP   ntpUDP;
       NTPClient timeClient(ntpUDP);
-
+      
       timeClient.begin();
       timeClient.update();
 
@@ -431,11 +439,11 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   
         ClockPtr->SetDateTime(1900 + ptm->tm_year, ptm->tm_mon + 1, ptm->tm_mday, timeClient.getHours(), timeClient.getMinutes(), UPDATE_SOURCE_NTP);
 
-        #ifdef TCPAPIDEBUG
-          Serial.print(F("Updated time: "));
-          Serial.println(ClockPtr->GetTimeString());
-        #endif
-  
+        Serial.print(F("Updated time: "));
+        Serial.println(ClockPtr->GetTimeString());
+        
+        ResetWatchDog();
+
         //update schedules after reboot
         g_pDbTaskScheduler->rescheduleAfterTimechange();
         g_pDbTaskScheduler->haltScheduler(false);
@@ -448,6 +456,12 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       };
     };
 
+
+    if(strlen(DynDNSConfig.szProvider) > 0)
+    {
+      EasyDDNS.update(120000);
+    };
+
     ResetWatchDog();
 
     if(IpLinkConfig.bClientEnabled == true)
@@ -457,6 +471,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     };
 
     ResetWatchDog();
+
+    g_bWiFiConnected = true;
   };  
 
 
@@ -467,6 +483,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     #endif
 
     g_nWiFiConnects += 1;
+    g_bWiFiConnected = false;
 
     if(g_nWiFiConnects > 15)
     {
@@ -759,6 +776,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           delete buffer;
           delete szDesc;
 
+          docResp.clear();
+
           return;
         };
 
@@ -836,6 +855,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             
             delete pDatabase;
             delete buffer;
+
+            docResp.clear();
 
             return;
           }
@@ -1078,9 +1099,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   {
     //variables
     ///////////
-    DynamicJsonDocument docResp(1500);
     int                 nRespCode = 200;
     bool                bHandled  = false;
+    DynamicJsonDocument docResp(1500);
             
     //commands which doesnt require a valid login
     /////////////////////////////////////////////
@@ -1088,8 +1109,10 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     {
       if(CheckApiAdminPassword(doc[F("Username")], doc[F("Password")]) == true)
       {
+        docResp[F("response")] = String(F("OK"));
+        
         nRespCode = 200;
-        docResp["response"] = String(F("OK"));
+        bHandled  = true;
       }
       else
       {
@@ -1097,8 +1120,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
         return;
       };
-
-      bHandled = true;
     };
 
 
@@ -1108,21 +1129,31 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       ///////////
       JsonObject            root        = docResp.to<JsonObject>();
       JsonArray             networks    = root.createNestedArray("networks");
-
-      for (int n = 0; n < LoRaWiFiCfg.nAvailNetworks; ++n) 
+    
+      if((int)doc[F("scanWiFi")] == 1)
       {
-        if(LoRaWiFiCfg.szNetwork[n] != NULL)
+        Serial.println(F("Scan for networks:"));
+  
+        //scan for networks
+        int nAvailNetworks = WiFi.scanNetworks();
+      
+        if(nAvailNetworks > 0)
         {
-          networks.add(LoRaWiFiCfg.szNetwork[n]);
+          for(int n = 0; n < nAvailNetworks; ++n) 
+          {
+            Serial.print(F("Found WiFi Net: "));
+            Serial.println(WiFi.SSID(n));
+    
+            networks.add(WiFi.SSID(n));
+          };      
         };
       };
-
-      docResp["response"] = String(F("OK"));
       
       PrepareSerializeWiFiConfig(docResp, &LoRaWiFiCfg);
 
-      nRespCode = 200;
-      bHandled = true;
+      docResp["response"] = String(F("OK"));
+      nRespCode           = 200;
+      bHandled            = true;
     };
 
 
@@ -1133,28 +1164,25 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       ///////////
       String strFolder = String((const char*)doc[F("Folder")]) + String((const char*)doc[F("NewFolder")]);
 
-      docResp["response"] = String(F("ERR"));
-      nRespCode = 403;
-
       //folders are only supported on
       //fatfs (sd cards)
       #if LORALINK_HARDWARE_SDCARD == 1
         SD.mkdir(strFolder);
 
         docResp["response"] = String(F("OK"));
-        nRespCode = 200;
+        nRespCode           = 200;
+        bHandled            = true;
       #else
         docResp["response"] = String(F("ERR"));
-        nRespCode = 500;
+        nRespCode           = 500;
+        bHandled            = true;
       #endif
-
-      bHandled = true;
     };
 
 
     //used to check if a specific file exist on the webserver
     if(strcmp_P(doc[F("command")], PSTR("fileExist")) == 0)
-    {  
+    { 
       if(LORALINK_WEBAPP_FS.exists((const char*)doc[F("file")]) == true)
       {
         docResp["response"] = String(F("OK"));
@@ -1163,15 +1191,16 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       {
         docResp["response"] = String(F("ERR"));
       };
-      
-      nRespCode = 200;
-      bHandled  = true;
+
+      nRespCode           = 200;
+      bHandled            = true;
     };
 
 
     if(strcmp_P(doc[F("command")], PSTR("GetDeviceCfg")) == 0)
     {  
       docResp["response"] = String(F("OK"));
+      
       PrepareSerializeDeviceConfig(docResp);
       
       nRespCode = 200;
@@ -1339,38 +1368,51 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       uint32_t dwUserID = doc[F("userID")];
       uint32_t dwDataID = 0;
       char    *szData   = new char[WEB_API_MAX_STRING_SIZE + 1];
+      char    *szResp   = new char[WEB_API_MAX_STRING_SIZE + 501];
+      int     nEventID;
+      
+      memset(szData, 0, WEB_API_MAX_STRING_SIZE); 
+      memset(szResp, 0, WEB_API_MAX_STRING_SIZE + 500);
 
-      memset(szData, 0, WEB_API_MAX_STRING_SIZE);
-  
-      docResp["nEventID"]   = g_pWebEvent->getEvent(dwUserID, (uint32_t*)&dwDataID, szData);
-      docResp["dwDataID"]   = dwDataID;
-      docResp["bConnected"] = LLSystemState.bConnected;
-      docResp["szData"]     = szData;
-      docResp["response"]   = String(F("OK"));
-      docResp["lUptimeSec"] = millis() / 1000;
+      nEventID = g_pWebEvent->getEvent(dwUserID, (uint32_t*)&dwDataID, szData);
+
+      sprintf_P(szResp, PSTR("{\"nEventID\": %i, \"dwDataID\": %u, \"bConnected\": %s, \"szData\": \"%s\", \"response\": \"OK\", \"lUptimeSec\": %u"), 
+        nEventID, 
+        dwDataID, 
+        (LLSystemState.bConnected == true ? "true" : "false"), 
+        szData, 
+        millis() / 1000
+      );
 
       #if LORALINK_HARDWARE_GPS == 1
-        docResp["bHaveGPS"] = true;
-        docResp["bRecordTrack"]     = g_bRecordTrack;
-        docResp["bValidSignal"]     = LLSystemState.bValidSignal;
-        docResp["fLatitude"]        = LLSystemState.fLatitude;
-        docResp["fLongitude"]       = LLSystemState.fLongitude;
-        docResp["fAltitude"]        = LLSystemState.fAltitude;
-        docResp["bTrackingActive"]  = g_bLocationTrackingActive;
-        docResp["nTrackingType"]    = g_nLocationTrackingType;
-        docResp["fSpeed"]           = LLSystemState.fSpeed;
-        docResp["fCourse"]          = LLSystemState.fCourse; 
-        docResp["nHDOP"]            = LLSystemState.nHDOP;
-        docResp["nNumSat"]          = LLSystemState.nNumSat;
-        docResp["dwLastValid"]      = (millis() - LLSystemState.dwLastValid) / 1000;
+        sprintf_P(szResp + strlen(szResp), 
+          PSTR(", \"bHaveGPS\": true, \"bRecordTrack\": %s, \"bValidSignal\": %s, \"fLatitude\": %f, \"fLongitude\": %f, \"fAltitude\": %f, \"bTrackingActive\": %s, \"nTrackingType\": %i, \"fSpeed\": %f, \"fCourse\": %f, \"nHDOP\": %i, \"nNumSat\": %i, \"dwLastValid\": %u}"), 
+          (g_bRecordTrack == true ? "true" : "false"),
+          (LLSystemState.bValidSignal == true ? "true" : "false"),  
+          LLSystemState.fLatitude,
+          LLSystemState.fLongitude,
+          LLSystemState.fAltitude,
+          (g_bLocationTrackingActive == true ? "true" : "false"),  
+          g_nLocationTrackingType,
+          LLSystemState.fSpeed,
+          LLSystemState.fCourse,
+          LLSystemState.nHDOP,
+          LLSystemState.nNumSat,
+          (millis() - LLSystemState.dwLastValid) / 1000
+        );
+        
       #else
-        docResp["bHaveGPS"] = false;
+        sprintf_P(szResp + strlen(szResp), 
+          PSTR(", \"bHaveGPS\": false}");
+        );
       #endif
       
-
-      bHandled = true;
-
+      sendStringResponse(resp, 200, (char*)(String(F("application/json"))).c_str(), szResp);
+      
       delete szData;
+      delete szResp;
+
+      return;
     };
 
 
@@ -1484,6 +1526,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
       delete pRecordset;
 
+      docResp.clear();
+
       return;
     };
 
@@ -1549,6 +1593,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       memset(buffer, 0, sizeof(buffer));
       strcpy_P((char*)&buffer, PSTR("]}"));
       resp->println(buffer);
+
+      docResp.clear();
       
       return;
     };
@@ -1648,6 +1694,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       resp->println(buffer);
       
       delete pRecordset;
+
+      docResp.clear();
 
       return;
     };
@@ -2180,6 +2228,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             resp->print(szData);
           
             fRoot.close();
+            docResp.clear();
     
             return;
           };
@@ -2310,6 +2359,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             resp->println(buffer);
             
             delete pRecordset;
+            docResp.clear();
     
             return;
           };
@@ -2531,7 +2581,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
               
               delete pRecordset;
               delete pDatabase;
-    
+
+              docResp.clear();
+              
               return;
             }
             else
@@ -2697,7 +2749,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     
               delete pRecordset;
               delete pDatabase;
-    
+
+              docResp.clear();
+              
               return;
             }
             else
@@ -2811,7 +2865,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
               delete buffer;
               delete szData;
-    
+
+              docResp.clear();
+              
               return;
             }
             else
@@ -2820,7 +2876,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
               delete szData;
               
               sendStringResponse(resp, 200, (char*)(String(F("application/json"))).c_str(), (char*)(String(F("{\"shoutoutMsgs\": []}"))).c_str());
-    
+
+              docResp.clear();
+              
               return;
             };
           };
@@ -2835,9 +2893,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             CWSFFileDBRecordset   *pRecordset;
             uint32_t              dwData;
             int                   nData;
-            char                  szData[LORALINK_MAX_MESSAGE_SIZE + 1];
+            char                  *szData = new char[LORALINK_MAX_MESSAGE_SIZE + 1];
             DateTime              dtTime;
-            char                  buffer[LORALINK_MAX_MESSAGE_SIZE + 200];
+            char                  *buffer = new char[LORALINK_MAX_MESSAGE_SIZE + 301];
             bool                  bNeedSep = false;
             
             memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
@@ -2851,9 +2909,9 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
             {
               pRecordset = new CWSFFileDBRecordset(pDatabase);
     
-              memset(buffer, 0, sizeof(buffer));     
-              strcpy_P((char*)&buffer, PSTR("{\"chatMsgs\": ["));
-              resp->println(buffer);
+              memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300);     
+              strcpy_P(buffer, PSTR("{\"chatMsgs\": ["));
+              resp->print(buffer);
       
               while(pRecordset->haveValidEntry() == true)
               {
@@ -2864,80 +2922,80 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
                 {     
                   if(bNeedSep == true)
                   {
-                    memset(buffer, 0, sizeof(buffer));            
-                    sprintf_P((char*)&buffer, PSTR(", "));
-                    resp->println(buffer);
+                    memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300);            
+                    sprintf_P(buffer, PSTR(", "));
+                    resp->print(buffer);
                   };
                   
                   bNeedSep = true;
                     
-                  memset(buffer, 0, sizeof(buffer));     
-                  sprintf_P((char*)&buffer, PSTR("{"));
-                  resp->println(buffer);
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300);     
+                  sprintf_P(buffer, PSTR("{"));
+                  resp->print(buffer);
       
                   //print entry id
-                  memset(buffer, 0, sizeof(buffer));  
-                  sprintf_P((char*)&buffer, PSTR("\"ID\": %u, "), pRecordset->getRecordPos());
-                  resp->println(buffer);
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300);   
+                  sprintf_P(buffer, PSTR("\"ID\": %u, "), pRecordset->getRecordPos());
+                  resp->print(buffer);
         
                   //chat head id
-                  memset(buffer, 0, sizeof(buffer));  
-                  sprintf_P((char*)&buffer, PSTR("\"ChatHeadID\": %u, "), dwData);
-                  resp->println(buffer);
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300);  
+                  sprintf_P(buffer, PSTR("\"ChatHeadID\": %u, "), dwData);
+                  resp->print(buffer);
       
                   //msg size
-                  memset(buffer, 0, sizeof(buffer)); 
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
                   pRecordset->getData(1, (void*)&nData, sizeof(nData));
-                  sprintf_P((char*)&buffer, PSTR("\"MsgSize\": %i, "), nData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"MsgSize\": %i, "), nData);
+                  resp->print(buffer);
       
                   //Tx Complete
-                  memset(buffer, 0, sizeof(buffer)); 
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
                   pRecordset->getData(2, (void*)&nData, sizeof(nData));
-                  sprintf_P((char*)&buffer, PSTR("\"TxComplete\": %i, "), nData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"TxComplete\": %i, "), nData);
+                  resp->print(buffer);
       
                   //Direction
-                  memset(buffer, 0, sizeof(buffer)); 
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
                   pRecordset->getData(3, (void*)&nData, sizeof(nData));
-                  sprintf_P((char*)&buffer, PSTR("\"Direction\": %i, "), nData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"Direction\": %i, "), nData);
+                  resp->print(buffer);
                   
         
                   //send / Recieved time
-                  memset(buffer, 0, sizeof(buffer)); 
-                  memset(szData, 0, sizeof(szData));
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
+                  memset(szData, 0, LORALINK_MAX_MESSAGE_SIZE);
                   dwData = 0;
                   pRecordset->getData(4, (void*)&dwData, sizeof(dwData));
                   dtTime = DateTime((time_t)dwData);
                   sprintf_P(szData, PSTR("%4i-%02i-%02i %02i:%02i:%02i\0"), dtTime.year(), dtTime.month(), dtTime.day(), dtTime.hour(), dtTime.minute(), dtTime.second());
-                  sprintf_P((char*)&buffer, PSTR("\"MsgTime\": \"%s\", "), szData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"MsgTime\": \"%s\", "), szData);
+                  resp->print(buffer);
                   
       
                   //contact ID
-                  memset(buffer, 0, sizeof(buffer));
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
                   pRecordset->getData(5, (void*)&dwData, sizeof(dwData));
-                  sprintf_P((char*)&buffer, PSTR("\"ContactID\": %u, "), dwData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"ContactID\": %u, "), dwData);
+                  resp->print(buffer);
                   
       
                   //message
-                  memset(buffer, 0, sizeof(buffer));
-                  memset(szData, 0, sizeof(szData));
-                  pRecordset->getData(6, (void*)&szData, sizeof(szData));
-                  sprintf_P((char*)&buffer, PSTR("\"Message\": \"%s\", "), szData);
-                  resp->println(buffer);
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
+                  memset(szData, 0, LORALINK_MAX_MESSAGE_SIZE);
+                  pRecordset->getData(6, (void*)szData, LORALINK_MAX_MESSAGE_SIZE);
+                  sprintf_P(buffer, PSTR("\"Message\": \"%s\", "), szData);
+                  resp->print(buffer);
     
       
                   //read
-                  memset(buffer, 0, sizeof(buffer));
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
                   pRecordset->getData(7, (void*)&nData, sizeof(nData));
-                  sprintf_P((char*)&buffer, PSTR("\"MsgRead\": %i "), nData);
-                  resp->println(buffer);
+                  sprintf_P(buffer, PSTR("\"MsgRead\": %i "), nData);
+                  resp->print(buffer);
                       
-                  memset(buffer, 0, sizeof(buffer));
-                  sprintf_P((char*)&buffer, PSTR("}"));
+                  memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
+                  sprintf_P(buffer, PSTR("}"));
                   resp->println(buffer);
                 };
                       
@@ -2950,13 +3008,17 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
               //end of db
               //we are done, send the footer
-              memset(buffer, 0, sizeof(buffer));
-              strcpy_P((char*)&buffer, PSTR("]}"));
-              resp->println(buffer);
+              memset(buffer, 0, LORALINK_MAX_MESSAGE_SIZE + 300); 
+              strcpy_P(buffer, PSTR("]}"));
+              resp->print(buffer);
                   
                   
               delete pRecordset;
               delete pDatabase;
+              delete buffer;
+              delete szData;
+
+              docResp.clear();
     
               return;
             }
@@ -2965,6 +3027,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
               sendStringResponse(resp, 200, (char*)(String(F("application/json"))).c_str(), (char*)(String(F("{\"chatMsgs\": []}"))).c_str());
               
               delete pDatabase;
+              delete buffer;
+              delete szData;
     
               return;
             };
@@ -3341,6 +3405,9 @@ void setup()
       Serial.println(F("Failed to mount SD Card"));
 
       LLSystemState.bSdOk = false;
+
+      delay(10000);  
+      ESP.restart();
     }
     else 
     {
@@ -3350,7 +3417,8 @@ void setup()
 
         LLSystemState.bSdOk = false;
 
-        return;
+        delay(10000);  
+        ESP.restart();
       };
     
       Serial.print("SD Card Type: ");
@@ -3403,7 +3471,7 @@ void setup()
 
   ReadDeviceConfig();
 
-  //check for hotfix update
+  //check for update
   char *szHotfixFile = LORALINK_FIRMWARE_FILE;
   File updateBin     = LORALINK_FIRMWARE_FS.open(szHotfixFile);
   
@@ -3473,28 +3541,6 @@ void setup()
       g_display.display();
     #endif
 
-    Serial.println(F("Scan for networks:"));
-
-    //scan for networks
-    LoRaWiFiCfg.nAvailNetworks = WiFi.scanNetworks();
-    
-    if(LoRaWiFiCfg.nAvailNetworks > 0)
-    {
-      LoRaWiFiCfg.szNetwork = new char*[LoRaWiFiCfg.nAvailNetworks + 1];
-      
-      for(int n = 0; n < LoRaWiFiCfg.nAvailNetworks; ++n) 
-      {
-        Serial.print(F("Found WiFi Net: "));
-        Serial.println(WiFi.SSID(n));
-
-        LoRaWiFiCfg.szNetwork[n] = new char[WiFi.SSID(n).length() + 1];
-        
-        memset(LoRaWiFiCfg.szNetwork[n], 0, WiFi.SSID(n).length());
-        strcpy(LoRaWiFiCfg.szNetwork[n], WiFi.SSID(n).c_str());
-      };
-    };
-
-    //enable after scan otherwise wifiscan fails
     EnableWiFi();
     
 
@@ -3548,7 +3594,7 @@ void setup()
     StartWebservers(ApiCallbackHandler);
 
     //create a task to handle the web requests
-    xTaskCreatePinnedToCore(WebServerTask, "WebServerTask", 10000, NULL, 1, &g_Core1TaskHandle2, 1);
+    xTaskCreatePinnedToCore(WebServerTask, "WebServerTask", LORALINK_STACKSIZE_WEBSERVER, NULL, 1, &g_Core1TaskHandle2, 1);
   #endif
 
 
@@ -3618,20 +3664,20 @@ void setup()
     };
 
     //this task is responsible to receive data and queue them internally
-    xTaskCreatePinnedToCore(ModemTask, "ModemTask", 8000, NULL, 1, &g_Core0TaskHandle, 0);
+    xTaskCreatePinnedToCore(ModemTask, "ModemTask", LORALINK_STACKSIZE_MODEM, NULL, 1, &g_Core0TaskHandle, 0);
 
   #endif
 
   //a task responsible for let the leds blink
-  xTaskCreatePinnedToCore(BlinkTask, "BlinkTask", 1000, NULL, 1, &g_Core0TaskHandle1, 1);
+  xTaskCreatePinnedToCore(BlinkTask, "BlinkTask", LORALINK_STACKSIZE_BLINK, NULL, 1, &g_Core0TaskHandle1, 1);
 
   //if an OLED display is attached, create a task, to show a nice info screen
   #if LORALINK_HARDWARE_OLED == 1
-    xTaskCreatePinnedToCore(DisplayTask, "DisplayTask", 2200, NULL, 1, &g_Core1TaskHandle, 1);
+    xTaskCreatePinnedToCore(DisplayTask, "DisplayTask", LORALINK_STACKSIZE_DISPLAY, NULL, 1, &g_Core1TaskHandle, 1);
   #endif
 
   //this task dequeues the received modem data (IP or LORA) and processes it...
-  xTaskCreatePinnedToCore(ModemDataTask, "ModemDataTask", 5000, NULL, 1, &g_Core0TaskHandle2, 0);
+  xTaskCreatePinnedToCore(ModemDataTask, "ModemDataTask", LORALINK_STACKSIZE_MODEM_DATA, NULL, 1, &g_Core0TaskHandle2, 0);
 
 
   //add the SkyNet protocol handler to the task handler
@@ -3648,7 +3694,7 @@ void setup()
 
 
   //create filetransfer/resume task if not existing...
-  //this is the case after firmware update
+  //this is the case after firmware update or clean install
   if(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_RSTFILETRANSFER) == 0)
   {
     sDBTaskRestartFileTransfer sTaskData;
@@ -3659,13 +3705,21 @@ void setup()
     g_pDbTaskScheduler->addSchedule(DBTASK_RSTFILETRANSFER, 600, 0, (byte*)&sTaskData, true);
   };
 
+
+  //create a task checking if the webserver still responds
+  //this can happen due to errors insdide the webserver or ip stack
+  //mostly happens when the device runs out of memory.
+  //when this task failes 3 times, it will reboot the device
   #if LORALINK_HARDWARE_WIFI == 1
   
     if(g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_CHECKWEBSERVER) == 0)
     {
       g_pDbTaskScheduler->addSchedule(DBTASK_CHECKWEBSERVER, 600, 0, NULL, true);
     };
-  
+
+    //when the device is a repeater, wifi will be disabled after 5 
+    //minutes after reboot to conserve battery...
+    g_lWiFiShutdownTimer = millis() + (5 * 60 * 1000);
   #endif
 
   
@@ -3683,7 +3737,7 @@ void setup()
     LLSystemState.fAltitude     = 0;
     LLSystemState.dwLastValid   = 0;
 
-    xTaskCreatePinnedToCore(GpsDataTask, "GpsDataTask", 3000, NULL, 1, &g_Core0TaskHandle3, 0);
+    xTaskCreatePinnedToCore(GpsDataTask, "GpsDataTask", LORALINK_STACKSIZE_GPS_DATA, NULL, 1, &g_Core0TaskHandle3, 0);
     
 
     //check if there is a running tracking
@@ -3751,8 +3805,6 @@ void setup()
 
     delete pRecordset;
   };
-
-  g_lWiFiShutdownTimer = millis() + (5 * 60 * 1000);
 };
 
 
@@ -3772,26 +3824,30 @@ void loop()
 
     if(g_pUserButton->pressed() == true)
     {
-      if(LoRaWiFiApCfg.bWiFiEnabled == true)
-      {
-        LoRaWiFiApCfg.bWiFiEnabled = false;
-        WiFi.mode(WIFI_OFF);
-      }
-      else
-      {
-        EnableWiFi();
-      };
+      #if LORALINK_HARDWARE_WIFI == 1
+        if(LoRaWiFiApCfg.bWiFiEnabled == true)
+        {
+          LoRaWiFiApCfg.bWiFiEnabled = false;
+          WiFi.mode(WIFI_OFF);
+        }
+        else
+        {
+          EnableWiFi();
+        };
+      #endif
     };
 
-    //turn wifi off, 5min after startup, when the 
-    //device is a repeater without login
-    if((DeviceConfig.nDeviceType == DEVICE_TYPE_REPEATER) && (millis() > g_lWiFiShutdownTimer) && (g_lWiFiShutdownTimer != 0))
-    {
-      g_lWiFiShutdownTimer        = 0;
-      LoRaWiFiApCfg.bWiFiEnabled  = false;
-      
-      WiFi.mode(WIFI_OFF);
-    };
+    #if LORALINK_HARDWARE_WIFI == 1
+      //turn wifi off, 5min after startup, when the 
+      //device is a repeater without login
+      if((DeviceConfig.nDeviceType == DEVICE_TYPE_REPEATER) && (millis() > g_lWiFiShutdownTimer) && (g_lWiFiShutdownTimer != 0))
+      {
+        g_lWiFiShutdownTimer        = 0;
+        LoRaWiFiApCfg.bWiFiEnabled  = false;
+        
+        WiFi.mode(WIFI_OFF);
+      };
+    #endif
     
     LLSystemState.lMemFreeOverall           = esp_get_free_heap_size();
 
@@ -4192,7 +4248,8 @@ void ModemDataTask(void *pParam)
       {
         lInfoCardSwitchTimer   = millis() + INFO_CARD_SWITCH_INTERVAL;
         nInfoCard             += 1;
-        //mem page: nInfoCard             = 1;
+        //mem page: 
+        nInfoCard             = 1;
         
         if(nInfoCard >= nMaxCard)
         {
@@ -4271,7 +4328,7 @@ void ModemDataTask(void *pParam)
           //memory info
           case 1:
           {  
-            sprintf_P(szText, PSTR("Free Mem:  %u\nFree Mdm:  %u\nFree Dsp:  %u\nFree Web:  %u\nFree Data: %u\0"), LLSystemState.lMemFreeOverall, LLSystemState.lMemFreeModemTask, LLSystemState.lMemFreeDisplayTask, LLSystemState.lMemFreeBlinkTask, LLSystemState.lMemFreeModemDataTask);
+            sprintf_P(szText, PSTR("Free Mem:  %u\nFree Mdm:  %u\nFree Dsp:  %u\nFree Web:  %u\nFree Data: %u\0"), LLSystemState.lMemFreeOverall, LLSystemState.lMemFreeModemTask, LLSystemState.lMemFreeDisplayTask, LLSystemState.lMemFreeWebServerTask, LLSystemState.lMemFreeModemDataTask);
   
             w = 0; h = 12;
             g_display.setCursor(w, h);

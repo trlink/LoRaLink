@@ -450,59 +450,6 @@ bool LLPROTO_DecodeShoutOutInfo(byte *pData, int nDataLen, char *szUser, uint32_
 
 
 #if LORALINK_HARDWARE_GPS == 1
-  
-  int  LLPROTO_CreateUserLocateReq(byte *pResult, uint32_t dwUntil, uint32_t dwRemoteUserID)
-  {
-    //variables
-    ///////////
-    int nPos = 0; 
-    
-    nPos += WriteDWORD(pResult + nPos, dwUntil);
-    nPos += WriteDWORD(pResult + nPos, dwRemoteUserID);
-  
-    return nPos;
-  };
-  
-  
-  bool LLPROTO_DecodeUserLocateReq(byte *pData, int nDataLen, uint32_t *pdwUntil, uint32_t *pdwRemoteUserID)
-  {
-    //variables
-    ///////////
-    int nPos = 0; 
-  
-    *pdwUntil = ReadDWORD(pData + nPos);
-    nPos += sizeof(uint32_t);
-    *pdwRemoteUserID = ReadDWORD(pData + nPos);
-    nPos += sizeof(uint32_t);
-  
-    return true;
-  };
-  
-  
-  int  LLPROTO_CreateUserLocateResp(byte *pResult, int nResult)
-  {
-    //variables
-    ///////////
-    int nPos = 0; 
-    
-    nPos += WriteINT(pResult + nPos, nResult);
-  
-    return nPos;
-  };
-  
-  
-  bool LLPROTO_DecodeUserLocateResp(byte *pData, int nDataLen, int *pnResult)
-  {
-    //variables
-    ///////////
-    int nPos = 0; 
-  
-    *pnResult = ReadINT(pData + nPos);
-    nPos += sizeof(int);
-  
-    return true;
-  };
-  
       
   int  LLPROTO_CreateUserPositionInd(byte *pResult, float fCourse, float fSpeed, int nHDOP, int nNumSat, uint32_t dwLastValid, float fLatitude, float fLongitude, float fAltitude, bool bValidSignal, int nPosType)
   {
@@ -663,7 +610,7 @@ bool CLoRaLinkProtocol::handleLoRaLinkProtocolData(_sSkyNetProtocolMessage *pPro
               fCourse2 = TinyGPS::course_to(LLSystemState.fLatitude, LLSystemState.fLongitude, fLatitude, fLongitude);
             };
   
-            sprintf_P(szData, PSTR("{\"Sender\": %lu, \"Course\": %f, \"Speed\": %f, \"HDOP\": %i, \"Sat\": %i, \"Age\": %lu, \"Lat\": %f, \"Lon\": %f, \"Alt\": %f, \"Valid\": %i, \"Type\": %i, \"Dst\": %f, \"Course2\": %f}"), pProtocolMsg->nOriginID, fCourse, fSpeed, nHDOP, nNumSat, dwLastValid, fLatitude, fLongitude, fAltitude, bValidSignal, nPosType, fDst, fCourse2);  
+            sprintf_P(szData, PSTR("{\\\"Sender\\\": %lu, \\\"Course\\\": %f, \\\"Speed\\\": %f, \\\"HDOP\\\": %i, \\\"Sat\\\": %i, \\\"Age\\\": %lu, \\\"Lat\\\": %f, \\\"Lon\\\": %f, \\\"Alt\\\": %f, \\\"Valid\\\": %i, \\\"Type\\\": %i, \\\"Dst\\\": %f, \\\"Course2\\\": %f}"), pProtocolMsg->nOriginID, fCourse, fSpeed, nHDOP, nNumSat, dwLastValid, fLatitude, fLongitude, fAltitude, bValidSignal, nPosType, fDst, fCourse2);  
   
             #if CLRP_DEBUG == 1
               Serial.println(szData);
@@ -1551,37 +1498,6 @@ bool CLoRaLinkProtocol::addShoutOut(uint32_t dwSenderNodeID, uint32_t dwUserID, 
 
 
 #if LORALINK_HARDWARE_GPS == 1
-
-  bool CLoRaLinkProtocol::addPositionTrackingReq(uint32_t dwLocalUserID, uint32_t dwRemoteDevID, uint32_t dwRemoteUsrID, int nDurationMin)
-  {
-    //variables
-    ///////////
-    byte                  *pDataAnswer         = new byte[256];
-    byte                  *pPayload            = new byte[256];
-    int                   nPayloadLen          = 0;
-    int                   nSuccess;
-    bool                  bForwarded           = false;
-    uint32_t              dwUntil              = (nDurationMin == 0 ? 0 : ClockPtr->getUnixTimestamp() + (nDurationMin * 60));
-    uint32_t              dwMsgID              = this->m_pSkyNetConnection->getMessageID();
-    
-  
-    nPayloadLen       = LLPROTO_CreateUserLocateReq(pPayload, dwUntil, dwRemoteUsrID);
-    nSuccess          = LLPROTO_Create(pDataAnswer, pPayload, nPayloadLen, LORA_PROTO_TYPE_USER_LOCATE_REQ, dwLocalUserID);
-  
-    nPayloadLen       = DATA_IND(pPayload, dwMsgID, DeviceConfig.dwDeviceID, dwRemoteDevID, DeviceConfig.dwDeviceID, 0, pDataAnswer, nSuccess);
-    
-    //enqueue only via LoRa, the device must be able to communicate directly
-    //this is a privacy / security restriction, since (except EMERG) positions
-    //are not routed through the entire network
-    this->m_pSkyNetConnection->enqueueMsgForType(dwRemoteDevID, dwMsgID, pDataAnswer, nSuccess, true, SKYNET_CONN_TYPE_LORA, 0); 
-  
-  
-    delete pDataAnswer;
-    delete pPayload;
-  
-    return true;
-  };
-
 
   bool CLoRaLinkProtocol::addPosition(uint32_t dwRemoteDevID, uint32_t dwLocalUserID, int nPositionType)
   {

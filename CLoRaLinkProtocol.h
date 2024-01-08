@@ -10,9 +10,9 @@
 #include "CLoRaLinkDatabase.h"
 
 
-#define CLRP_INFO                           1
-#define CLRP_DEBUG                          1
-#define CLRP_ERROR                          1
+#define CLRP_INFO                           0
+#define CLRP_DEBUG                          0
+#define CLRP_ERROR                          0
 
 
 
@@ -33,7 +33,6 @@
 
 
 #define LORA_PROTO_TYPE_DATA_HEADER         1
-//#define LORA_PROTO_TYPE_DATA                2
 #define LORA_PROTO_TYPE_DATA_REQ            3
 #define LORA_PROTO_TYPE_USERQ_REQ           4
 #define LORA_PROTO_TYPE_USERQ_RESP          5
@@ -43,8 +42,6 @@
 #define LORA_PROTO_TYPE_DATA_COMPLETE_CONF  9
 #define LORA_PROTO_TYPE_SHOUTOUT_IND        10
 #define LORA_PROTO_TYPE_SHOUTOUT_CONF       11
-#define LORA_PROTO_TYPE_USER_LOCATE_REQ     12
-#define LORA_PROTO_TYPE_USER_LOCATE_RESP    13
 #define LORA_PROTO_TYPE_USER_POSITION_IND   14
 
 
@@ -116,12 +113,6 @@ int  LLPROTO_CreateShoutOutInfo(byte *pResult, char *szUser, uint32_t dwTimeSent
 bool LLPROTO_DecodeShoutOutInfo(byte *pData, int nDataLen, char *szUser, uint32_t *pdwTimeSent, char *szMsg);
 
 #if LORALINK_HARDWARE_GPS == 1
-
-  int  LLPROTO_CreateUserLocateReq(byte *pResult, uint32_t dwUntil, uint32_t dwRemoteUserID);
-  bool LLPROTO_DecodeUserLocateReq(byte *pData, int nDataLen, uint32_t *pdwUntil, uint32_t *pdwRemoteUserID);
-  
-  int  LLPROTO_CreateUserLocateResp(byte *pResult, int nResult);
-  bool LLPROTO_DecodeUserLocateResp(byte *pData, int nDataLen, int *pnResult);
       
   int  LLPROTO_CreateUserPositionInd(byte *pResult, float fCourse, float fSpeed, int nHDOP, int nNumSat, uint32_t dwLastValid, float fLatitude, float fLongitude, float fAltitude, bool bValidSignal, int nPosType);
   bool LLPROTO_DecodeUserPositionInd(byte *pData, int nDataLen, float *pfCourse, float *pfSpeed, int *pnHDOP, int *pnNumSat, uint32_t *pdwLastValid, float *pfLatitude, float *pfLongitude, float *pfAltitude, bool *pbValidSignal, int *pnPosType);
@@ -161,13 +152,6 @@ class CLoRaLinkProtocol : public CTaskIF
     bool addMessage(uint32_t dwLocalUserID, String strUser, String strDev, char *szMsg, uint32_t dwDevID, uint32_t dwUsrID, uint32_t dwContID, int nDirection);
 
     #if LORALINK_HARDWARE_GPS == 1
-    
-      //this send a pos tracking request to a remote device. if tracking was allowed by the other user
-      //the other device creates a task sending it's position. position tracking only works over LoRa,
-      //for "normal" positions. if an emergency pos is received, this position will be forwarded to all
-      //known devices!
-      bool addPositionTrackingReq(uint32_t dwLocalUserID, uint32_t dwRemoteDevID, uint32_t dwRemoteUsrID, int nDurationMin);
-  
       
       bool addPosition(uint32_t dwRemoteDevID, uint32_t dwLocalUserID, int nPositionType);
       

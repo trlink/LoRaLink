@@ -21,7 +21,6 @@ WebServerOnPostRequest   g_apiCallbackHandler;
 //////////////////
 void handleRoot(HTTPRequest * req, HTTPResponse * res);
 void handle404(HTTPRequest * req, HTTPResponse * res);
-void handle204(HTTPRequest * req, HTTPResponse * res);
 void handleFile(HTTPRequest * req, HTTPResponse * res);
 void handleAPI(HTTPRequest * req, HTTPResponse * res);
 void handleRedirect(HTTPRequest * req, HTTPResponse * res);
@@ -38,22 +37,12 @@ void StartWebservers(WebServerOnPostRequest apiHandler)
   g_insecureServer = new HTTPServer();
 
   //setup handler
-  ResourceNode *nodeRedirect  = new ResourceNode("/generate_204", "GET", &handle204);
-  ResourceNode *nodeRedirect1 = new ResourceNode("/connecttest.txt", "GET", &handleRedirect);
-  ResourceNode *nodeRedirect2 = new ResourceNode("/redirect", "GET", &handleRedirect);
-  ResourceNode *nodeRedirect3 = new ResourceNode("/captiveportal/generate_204", "GET", &handle204);
-  ResourceNode *nodeRedirect4 = new ResourceNode("/hotspot-detect.html", "GET", &handleRedirect);
   ResourceNode *nodeRoot      = new ResourceNode("/", "GET", &handleRoot);
   ResourceNode *node404       = new ResourceNode("", "", &handleFile);
   ResourceNode *nodeUpload    = new ResourceNode("/upload", "POST", &handleUpload);
   ResourceNode *nodeAPI       = new ResourceNode("/api/api.json", "POST", &handleAPI);
 
   
-  g_insecureServer->registerNode(nodeRedirect4);
-  g_insecureServer->registerNode(nodeRedirect3);
-  g_insecureServer->registerNode(nodeRedirect2);
-  g_insecureServer->registerNode(nodeRedirect1);
-  g_insecureServer->registerNode(nodeRedirect);
   g_insecureServer->registerNode(nodeAPI);
   g_insecureServer->registerNode(nodeRoot);
   g_insecureServer->registerNode(nodeUpload);
@@ -85,6 +74,10 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
   std::string     mimeType;
   std::string     name;
   size_t          semicolonPos;
+
+  #ifdef WEBSERVERDEBUG
+    Serial.println(F("--> handleFormUpload()"));
+  #endif
 
   //get folder from query string
   params->getQueryParameter("folder", folder);
@@ -121,7 +114,7 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     return;
   };
 
-  while(parser->nextField()) 
+  while((parser->nextField() == true) && (parser->endOfField() == false)) 
   {
     // For Multipart data, each field has three properties:
     // The name ("name" value of the <input> tag)
@@ -130,6 +123,9 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     // The mime type (It is determined by the client. So do not trust this value and blindly start
     //   parsing files only if the type matches)
     name = parser->getFieldName();
+
+    Serial.print(F("FieldName: "));
+    Serial.println(name.c_str());
     
     // Double check that it is what we expect
     if(name == "file") 
@@ -148,7 +144,7 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
         
         // Create a new file on spiffs to stream the data into
         File file = LORALINK_WEBAPP_FS.open(filename.c_str(), "w");
-        byte *buf = new byte[MAX_FILE_RESP_BUFF_SIZE];
+        byte *buf = new byte[MAX_FILE_RESP_BUFF_SIZE + 1];
         size_t readLength;
 
         if(file)
@@ -196,6 +192,11 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
   
   //res->println("</body></html>");
   delete parser;
+
+  #ifdef WEBSERVERDEBUG
+    // We log all three values, so that you can observe the upload on the serial monitor:
+    Serial.println(F("<-- handleFormUpload()"));
+  #endif
 };
 
 
@@ -210,12 +211,13 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
   int  nLen = 0;
   String strFile = req->getRequestString().c_str();
 
+  //remove query string from filename
   if(strFile.indexOf("?") > 0)
   {
     strFile = strFile.substring(0, strFile.indexOf("?"));
   };
 
-  //replace blanks in files&folders
+  //replace blanks in files&folders (uri decode)
   strFile.replace("%20", " ");
   
   #ifdef WEBSERVERDEBUG
@@ -255,7 +257,6 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
       }
       else
       {
-        file.close();
         handle404(req, res);
       };
     }
@@ -298,21 +299,13 @@ String getContentType(String strFile)
   else return String(F("text/plain"));
 };
 
+
 void handleRedirect(HTTPRequest * req, HTTPResponse * res)
 {
   res->setHeader("Content-Type", "text/html");
   res->setStatusCode(302);
   res->setHeader("Location", "/index.html");
 };
-
-
-void handle204(HTTPRequest * req, HTTPResponse * res)
-{
-  res->setHeader("Content-Type", "text/html");
-  res->setStatusCode(204);
-  res->setHeader("Location", "/index.html");
-};
-
 
 
 void handleRoot(HTTPRequest * req, HTTPResponse * res) 
@@ -323,6 +316,11 @@ void handleRoot(HTTPRequest * req, HTTPResponse * res)
 
 void sendStringResponse(HTTPResponse *res, int nResult, char *szResponseType, char *szText)
 {
+  #ifdef WEBSERVERDEBUG
+    Serial.print(F("sendStringResponse: "));
+    Serial.println(szText);
+  #endif
+  
   res->setStatusCode(nResult);
   res->setHeader("Content-Type", szResponseType);
   res->print(szText);
@@ -346,11 +344,9 @@ void sendJsonResponse(HTTPResponse *res, int nResult, DynamicJsonDocument &pJson
     Serial.print(F(" response: "));
     Serial.println(szJson);
   #endif
-  
-  res->setStatusCode(nResult);
-  res->setHeader("Content-Type", "application/json");
-  res->print(szJson);
 
+  sendStringResponse(res, nResult, "application/json", szJson);
+  
   delete szJson;
 };
 

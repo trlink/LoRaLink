@@ -27,7 +27,6 @@ void ReadDeviceConfig()
   char      *szOutput = new char[MAX_CFG_SIZE];;
   int       nLength;
 
-
   
   //read admin user config
   if(ReadConfig(LORALINK_CONFIG_FS, CONFIG_FILE_ADMIN, doc) == true)
@@ -52,11 +51,9 @@ void ReadDeviceConfig()
     {
       Serial.println(F("Config written..."));
     };
-
-    doc.clear();
   };
   
-
+  doc.clear();
 
   //read device config
   doc = DynamicJsonDocument(MAX_CFG_SIZE);
@@ -291,7 +288,7 @@ bool ReadConfig(fs::FS &fs, char *szConfigFile, DynamicJsonDocument &doc)
 
   Serial.print(F("--> ReadConfig(): "));
   Serial.println(szConfigFile);
-  
+
   fConfigFile = LORALINK_CONFIG_FS.open(szConfigFile, "r");
 
   DeserializationError error = deserializeJson(doc, fConfigFile);
@@ -301,9 +298,12 @@ bool ReadConfig(fs::FS &fs, char *szConfigFile, DynamicJsonDocument &doc)
     Serial.print(F("Error: deserializeJson: "));
     Serial.println(error.c_str());
 
+    fConfigFile.close();
+
     return false;
   };
   
+
   Serial.print(F("serializeJson = "));
   serializeJson(doc, Serial);
   Serial.println("");

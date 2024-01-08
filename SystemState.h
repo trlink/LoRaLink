@@ -19,7 +19,7 @@ struct _sSystemState
   uint64_t      lExtSpiBytesAvail;
   long          lMemFreeOverall;
   long          lMemFreeModemDataTask;
-  long          lMemFreeBlinkTask;
+  long          lMemFreeWebServerTask;
   long          lMemFreeModemTask;
   long          lMemFreeDisplayTask;
   long          lBlocksToTransfer;

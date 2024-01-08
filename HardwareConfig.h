@@ -7,14 +7,20 @@
   #define LORALINK_MAX_MESSAGE_SIZE             1500
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
-  #define LORALINK_HARDWARE_SPIFFS              0       //device has an internal spi ffs
+  #define LORALINK_HARDWARE_SPIFFS              0       //device has an internal spi ffs (not longer supported)
   #define LORALINK_HARDWARE_BATSENSE            0       //device has a power sensor (Resistor at analog port)
   #define LORALINK_HARDWARE_LED                 1       //Device has LEDs
   #define LORALINK_HARDWARE_GPS                 1       //Device has GPS
   #define LORALINK_HARDWARE_WIFI                1       //device has WiFi
   #define LORALINK_HARDWARE_OLED                1       //device has a display
-  
+  #define LORALINK_STACKSIZE_WEBSERVER          18000  
+  #define LORALINK_STACKSIZE_MODEM              8000
+  #define LORALINK_STACKSIZE_MODEM_DATA         6000
+  #define LORALINK_STACKSIZE_BLINK              1000
+  #define LORALINK_STACKSIZE_DISPLAY            2200
+  #define LORALINK_STACKSIZE_GPS_DATA           3000
 
+  
   //behaviour
   ///////////
   #define INFO_CARD_SWITCH_INTERVAL             7000    //time in ms after the info display will be changed
@@ -26,7 +32,7 @@
   //////////
   
   //for t-beam devices uncomment this line
-  //#define LORALINK_HARDWARE_TBEAM
+  #define LORALINK_HARDWARE_TBEAM
 
   //for heltec
   //#define LORALINK_HARDWARE_ESP32V3
@@ -34,7 +40,7 @@
   //select ESP32 Dev Module and set the following:
   //Flash Size: 4MB
   //Partition Scheme: Default 4MB SPIFFS, 1.2MB APP
-  #define LORALINK_HARDWARE_ESP32
+  //#define LORALINK_HARDWARE_ESP32
 
   //without modem (ip only nodes)
   //#define LORALINK_HARDWARE_ESP32_NOMODEM

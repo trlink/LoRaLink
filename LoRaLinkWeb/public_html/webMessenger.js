@@ -7,7 +7,7 @@ var g_strServer       = "/";
 var g_nLoadPos        = 0;
 var MAX_MESSAGE_CHARS = 1500;
 var g_aKnownNodes     = [];
-var g_aRoutes         = {};
+var g_aRoutes         = [];
 var g_aChats          = [];
 var g_aContacts       = [];
 var g_aChatMsgs       = [];
@@ -32,6 +32,8 @@ var g_bTrackingActive = false;
 var g_nTrackingType   = 0;
 var g_pRadar          = null;
 var g_pMap            = null;
+var g_pMarkerMe       = null;
+var g_pNodeMarkers    = [];
 var g_aTileDownloader = [];
 var g_aTileCheck      = [];
 var g_bTileDownload   = false;
@@ -122,8 +124,6 @@ $(document).ready(function() {
     $("#imgUnBlockContact").attr("src", "unblock-user.png");
     $("#imgShoutOutBack").attr("src", "back.png");
     $("#imgMsgsBack").attr("src", "back.png");
-    $("#imgAllowPosTracking").attr("src", "allowTracking.png");
-    $("#imgDisallowPosTracking").attr("src", "disallowTracking.png");
     $("#imgGpsState").attr("src", "invalidGPS.png");
     $("#imgConnState").attr("src", "disconnected.png");
     $("#imgLocationTracking").attr("src", "locationTracking.png");
@@ -145,6 +145,56 @@ function initWebEventReader() {
     //init event handler
     var init = setInterval(function () {
         readWebEvents();
+        
+        //dwonload tiles one by one...
+        //had to also use a bool to avoid async downloading of tiles, which 
+        //crashed the esp (even if async set to false, i had multiple uploads)
+        //on tbeam check & upload freezed the webserver process, so download
+        //will start after the tiles are checked...
+        if((g_bTileDownload === false) && (g_bOnlineTiles === true) && (g_aTileCheck.length <= 0)) { 
+            
+            if($("#pbTileDownloader").hasClass("bg-success") === false) {
+                $("#pbTileDownloader").addClass("bg-success");
+                $("#pbTileDownloader").removeClass("bg-warning");
+                
+                //reset progress bar
+                $("#pbTileDownloader").attr("aria-valuenow", "0");
+                $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
+                $("#pbTileDownloader").css("width", "0%");
+            }
+            else {
+                if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileDownloader.length) {
+                    $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
+                    $("#pbTileDownloader").attr("aria-valuenow", "0");
+                };
+            };
+            
+            tileDownloader();
+        };
+
+        //check if tiles exist
+        if(g_bOnlineTiles === true) {
+            
+            if(g_aTileCheck.length > 0) {
+                if($("#pbTileDownloader").hasClass("bg-success") === true) {
+                    $("#pbTileDownloader").removeClass("bg-success");
+                    $("#pbTileDownloader").addClass("bg-warning");
+
+                    //reset progress bar
+                    $("#pbTileDownloader").attr("aria-valuenow", "0");
+                    $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                    $("#pbTileDownloader").css("width", "0%");
+                }
+                else {
+                    if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileCheck.length) {
+                        $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                        $("#pbTileDownloader").attr("aria-valuenow", "0");
+                    };
+                };
+
+                tileCheck();
+            };
+        };
     }, 1000);
 };
 
@@ -160,7 +210,7 @@ function readWebEvents() {
         contentType: 'application/json; charset=utf-8',
         crossDomain: true,
         dataType: 'json',
-        async: true,
+        async: false,
         headers: {
             "accept": "application/json",
             "Access-Control-Allow-Origin": "*",
@@ -185,8 +235,6 @@ function readWebEvents() {
             //does the device have a GPS RX connected
             //if not disable all GPS controls
             if(msg["bHaveGPS"] === false) {
-                $("#imgAllowPosTracking").hide();
-                $("#imgDisallowPosTracking").hide();
                 $("#imgGpsState").hide();
                 $("#imgLocationTracking").hide();
                 $("#mnuItemGPS").hide();
@@ -275,7 +323,7 @@ function readWebEvents() {
                 if(g_bRecordTrack !== msg["bRecordTrack"]) {
                     g_bRecordTrack = msg["bRecordTrack"];
                     
-                    if(g_bRecordTrack == true) {
+                    if(g_bRecordTrack === true) {
                         if($("#mnuRecordTrackStop").hasClass("disabled") == true) {
                             $("#mnuRecordTrackStop").removeClass("disabled");
                         };
@@ -293,6 +341,12 @@ function readWebEvents() {
                             $("#mnuRecordTrack").removeClass("disabled");
                         };
                     };
+                };
+                
+                //update my pos on map
+                if(g_pMarkerMe !== null) {
+                    var newLatLng = new L.LatLng(g_fLocalLat, g_fLocalLon);
+                    g_pMarkerMe.setLatLng(newLatLng); 
                 };
             };
             
@@ -387,6 +441,16 @@ function readWebEvents() {
                         console.log("Set sender " + gps.Sender + " course to " + gps.Course2 + " Distance: " + gps.Dst);
                         
                         g_pRadar.addPoint(gps);
+                         
+                        for(var n = 0; n < g_pNodeMarkers.length; ++n) {
+                            if(g_pNodeMarkers[n].key === gps.Sender.toString()) {
+                                var newLatLng = new L.LatLng(parseFloat(gps.Lat), parseFloat(gps.Lon));
+                    
+                                g_pNodeMarkers[n].value.Marker.setLatLng(newLatLng); 
+                                
+                                break;
+                            };
+                        };
                     };
                 };
                 break;
@@ -397,31 +461,13 @@ function readWebEvents() {
             console.log("Unable to read events");
             console.log(JSON.stringify(msg));
             
-            g_bConnected = false;
-                
             if(g_bConnected === true) {
-                $("#imgConnState").attr("src", "connected.png");
-            }
-            else {
+                g_bConnected = false;
+
                 $("#imgConnState").attr("src", "disconnected.png");
             };
         }
     });
-    
-    
-    //dwonload tiles one by one...
-    //had to also use a bool to avoid async downloading of tiles, which 
-    //crashed the esp (even if async set to false, i had multiple uploads)
-    if((g_bTileDownload == false) && (g_bOnlineTiles == true)) { 
-        tileDownloader();
-    };
-    
-    //check if tiles exist
-    if(g_bOnlineTiles == true) {
-        tileCheck();
-    };
-    
-    
 };
 
 
@@ -557,6 +603,9 @@ function showMapView() {
 
 
 function closeMapView() {
+    //reset markers
+    g_pMarkerMe = null;
+    
     $("#divMapContainer").hide();
     toggleMessageView(false);
 }
@@ -592,25 +641,39 @@ function updateDeviceMarkers() {
         shadowUrl: '/images/marker-shadow.png'
         });
     var greenIcon = new L.icon({iconUrl: '/images/marker-icon-green.png',
-        shadowUrl: '/images/marker-shadow.png',
+        shadowUrl: '/images/marker-shadow.png'
     });
+    var oNodeMarker = {};
+    
+    
+    g_pNodeMarkers = [];
     
     for(var i = 0; i < g_aKnownNodes.length; ++i) {
         //if pos is valid
         if((parseFloat(g_aKnownNodes[i].posN) !== 0) && (parseFloat(g_aKnownNodes[i].posE) !== 0)) {
-            L.marker([parseFloat(g_aKnownNodes[i].posN), parseFloat(g_aKnownNodes[i].posE)], {icon: blueIcon}).addTo(g_pMap).bindPopup(
+            
+            oNodeMarker = {};
+            oNodeMarker.NodeID = g_aKnownNodes[i].NodeID;
+            oNodeMarker.Marker = L.marker([parseFloat(g_aKnownNodes[i].posN), parseFloat(g_aKnownNodes[i].posE)], {icon: blueIcon});
+            
+            oNodeMarker.Marker.addTo(g_pMap).bindPopup(
                     "<b>" + g_aKnownNodes[i].DevName + "</b><br/>ID: " + 
                     g_aKnownNodes[i].NodeID + "<br/>Last Heard: " + g_aKnownNodes[i].LastHeard + "<br/>WGS84: " +
                     g_aKnownNodes[i].posN + ", " + g_aKnownNodes[i].posE + "<br/>Loc: " +
                     convertToLocator(g_aKnownNodes[i].posE, g_aKnownNodes[i].posN)
             );
+    
+            g_pNodeMarkers.push({key: oNodeMarker.NodeID, value: oNodeMarker});
         };
     };
     
     
-    if(g_bGpsValid == true) {
-        if((parseFloat(g_fLocalLat) != 0) && (parseFloat(g_fLocalLon) != 0)) {
-            L.marker([parseFloat(g_fLocalLat), parseFloat(g_fLocalLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
+    if(g_bGpsValid === true) {
+        if((parseFloat(g_fLocalLat) !== 0) && (parseFloat(g_fLocalLon) !== 0)) {
+            
+            g_pMarkerMe = L.marker([parseFloat(g_fLocalLat), parseFloat(g_fLocalLon)], {icon: greenIcon});
+           
+            g_pMarkerMe.addTo(g_pMap).bindPopup(
                 "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
                 g_dwNodeID + "<br/>WGS84: " +
                 g_fLocalLat + ", " + g_fLocalLon + "<br/>Loc: " +
@@ -619,8 +682,11 @@ function updateDeviceMarkers() {
         };
     }
     else {
-        if((g_fConfigLat != 0) && (g_fConfigLon != 0)) {
-            if((parseFloat(g_fConfigLat) != 0) && (parseFloat(g_fConfigLon) != 0)) {
+        g_pMarkerMe = null;
+        
+        //add only if not set to 0/0
+        if((g_fConfigLat != 0) && (g_fConfigLon !== 0)) {
+            if((parseFloat(g_fConfigLat) !== 0) && (parseFloat(g_fConfigLon) !== 0)) {
                 L.marker([parseFloat(g_fConfigLat), parseFloat(g_fConfigLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
                     "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
                     g_dwNodeID + "<br/>WGS84: " +
@@ -797,8 +863,6 @@ async function tileCheck() {
                 if(msg["response"] === "ERR") {
                     if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
                         g_aTileDownloader.push(g_aTileCheck[0]);
-
-                        $("#pbTileDownloader").attr("aria-valuemax", parseInt($("#pbTileDownloader").attr("aria-valuemax")) + 1);
                     };        
                 };
             },
@@ -809,9 +873,12 @@ async function tileCheck() {
         });
         
         g_aTileCheck.splice(0, 1);
+        
+        //update progress bar
+        $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
+        $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileCheck.length) * 100.0) + "%");
     };
-    
-    
+     
     return g_aTileCheck.length;
 };
 
@@ -831,6 +898,7 @@ async function tileDownloader() {
     var strPath = "";
     var strFolder = "";
     var nIdx = 0;
+    var bErr = false;
     
     
     if(g_bTileDownload === false) {
@@ -846,7 +914,7 @@ async function tileDownloader() {
             //try to create the path, don't care if it exist...
             strFile = "/tiles" + strFile;
 
-            while(nIdx < strFile.length) {
+            while((nIdx < strFile.length) && (bErr === false)) {
                 strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
                 nIdx    = strFile.indexOf("/", nIdx + 1);
 
@@ -876,15 +944,21 @@ async function tileDownloader() {
                             console.log("Error create folder:");
 
                             console.log(JSON.stringify(msg));
+                            
+                            g_bTileDownload = false;
+                            bErr            = true;
                         }
-                    });
+                    });                    
                 };
             };
 
-            //path should exist now, download the file
-            const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
+            if(bErr === false) {
+                //path should exist now, download the file
+                const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
+
+                g_aTileDownloader.splice(0, 1);
+            };
             
-            g_aTileDownloader.splice(0, 1);
             g_bTileDownload = false;
         }
         else {
@@ -928,11 +1002,10 @@ async function downloadImage(strPath, strFile, imageSrc) {
     
     var fd = new FormData(form);
     const res = await uploadFile(fd, strPath); 
-    
-    $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
-    
+
     //update progress bar
-    $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / parseInt($("#pbTileDownloader").attr("aria-valuemax"))) * 100.0) + "%");
+    $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
+    $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileDownloader.length) * 100) + "%");
     
     g_bTileDownload = false; 
     
@@ -1461,27 +1534,12 @@ function loadChatMsgs(chatID, bResetNew) {
                 $("#imgUnBlockContact").hide();
                 $("#imgBlockContact").show();
             };
-            
-            if(g_bHaveGPS === true) {
-                if(oContact.AllowTracking === 1) {
-                    $("#imgDisallowPosTracking").show();
-                    $("#imgAllowPosTracking").hide();
-                }
-                else {
-                    $("#imgDisallowPosTracking").hide();
-                    $("#imgAllowPosTracking").show();
-                };
-            };
         }
         else {
             $("#txtMsgText2").attr("disabled", false);
             $("#btnSendMessage2").attr("disabled", false);
             $("#imgUnBlockContact").hide();
             $("#imgBlockContact").show();
-            
-            if(g_bHaveGPS === true) {
-                $("#imgAllowPosTracking").show();
-            };
         };
 
         $.ajax({
@@ -2034,7 +2092,7 @@ function getRouting() {
         async: true,
         success: function(msg) {
             
-            g_aRoutes = {};
+            g_aRoutes = [];
             
             for(var i = 0; i < msg["Routes"].length; ++i) {
                 var oRoute = {};

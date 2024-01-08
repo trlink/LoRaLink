@@ -74,7 +74,7 @@ function btnLogin_Click() {
             success: function(msg) {
                 console.log(JSON.stringify(msg));
 
-                if(msg["response"] == "OK") {
+                if(msg["response"] === "OK") {
                     $("#txtAdminUser").val($("#txtUsername").val());
                     $("#txtAdminPassword").val($("#txtPassword").val());
                     $("#txtAdminPasswordConf").val($("#txtPassword").val());
@@ -83,7 +83,8 @@ function btnLogin_Click() {
                     $("#hfPwdHash").val(($("#txtPassword").val().length > 0 ? CryptoJS.MD5($("#txtPassword").val()) : ""));
                     $("#hfAdminUser").val(strAdminUser);
                     
-                    loadConfig();
+                    $("#tabConfig").show();
+                    $("#dlgWait").hide();
                 }
                 else {
                     $("#dlgWait").hide();
@@ -145,15 +146,9 @@ function btnSaveAdminUser_Click() {
 
 
 
-function loadConfig() {
-    
-    getDDNSConfig();
-};
-
-
-
 function getDDNSConfig() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get Dynamic DNS config...");
     
     $.ajax({
@@ -165,11 +160,11 @@ function getDDNSConfig() {
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
 
-            if(msg["response"] == "OK") {
+            if(msg["response"] === "OK") {
                 $("#cmbSettingsDDNSType").selectpicker('val', msg["szProvider"]);
                 $("#txtDDNSUserName").val(msg["szUser"]);
                 $("#txtDDNSPassword").val(msg["szPassword"]);
@@ -180,21 +175,36 @@ function getDDNSConfig() {
                 $("#lblDesc").text("Failed to load Dynamic DNS config...");
             };
             
-            //load next config
-            getFilesystemConfig();
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load Dynamic DNS config...");
+            $("#dlgWait").hide();
         }
     });
 };
 
 
 function getFilesystemConfig() {
+    //variables
+    ///////////
+    var dtTable = null;
     
+    
+    $("#dlgWait").show();
     $("#lblDesc").text("Get Filesystem config...");
+            
+    if($.fn.dataTable.isDataTable('#dtFilesList')) {
+        $('#dtFilesList').empty();
+    };
+    
+    
+    
+    $("#file").prop("disabled", true);
+    $("#frmFilesCreateFolder").hide();
+    
     
     $.ajax({
         url: g_strServer + 'api/api.json',
@@ -246,13 +256,13 @@ function getFilesystemConfig() {
                 $("#lblDesc").text("Failed to load filesystem config...");
             };
             
-            //load next config
-            getModemConfig();
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load filesystem config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -501,6 +511,7 @@ function openDirectory(strDir) {
     loadFilesFromDev($('#cmbFileSystem').val(), strDir);
 };
 
+
 function deleteFile(strFile) {
     $.ajax({
         url: g_strServer + 'api/api.json',
@@ -568,6 +579,7 @@ function completeHandler(event) {
 
 function getModemConfig() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get LoRa Modem config...");
     
     $.ajax({
@@ -579,7 +591,7 @@ function getModemConfig() {
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
 
@@ -602,12 +614,13 @@ function getModemConfig() {
             };
             
             //load next config
-            getWiFiApConfig();
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load Modem config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -616,6 +629,7 @@ function getModemConfig() {
 
 function getWiFiApConfig() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get WiFi Accesspoint config...");
     
     $.ajax({
@@ -627,7 +641,7 @@ function getWiFiApConfig() {
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
 
@@ -643,12 +657,13 @@ function getWiFiApConfig() {
             };
             
             //load next config
-            getWiFiConfig();
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load WiFiAP config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -657,6 +672,7 @@ function getWiFiApConfig() {
 
 function getWiFiConfig() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get WiFi config...");
     
     $.ajax({
@@ -665,10 +681,11 @@ function getWiFiConfig() {
         crossDomain: true,
         data: '{"command": "GetWiFi", ' +
               ' "Username": "' + $("#hfAdminUser").val() + '", ' +
+              ' "scanWiFi": 1, ' +
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
             
@@ -723,7 +740,7 @@ function getWiFiConfig() {
                 
                 $("#txtWiFi_Password").val(msg["szWLANPWD"]);
                 
-                getDeviceConfig();
+                $("#dlgWait").hide();
             }
             else {
                 $("#lblDesc").text("Failed to load WiFi config...");
@@ -733,6 +750,7 @@ function getWiFiConfig() {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load WiFi config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -742,6 +760,7 @@ function getWiFiConfig() {
 
 function getDeviceConfig() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get Device config...");
     
     $.ajax({
@@ -753,7 +772,7 @@ function getDeviceConfig() {
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
             
@@ -770,16 +789,18 @@ function getDeviceConfig() {
                 $("#txtSettingsDeviceShoutOut").val(msg["nMaxShoutOutEntries"]);
                 $("#txtSettingsMaxUser").val(msg["nMaxUser"]);
                 
-                getLinkConfig();
+                $("#dlgWait").hide();
             }
             else {
                 $("#lblDesc").text("Failed to load Device config...");
+                $("#dlgWait").hide();
             };
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load Device config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -798,7 +819,7 @@ function getLinkConfig() {
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',
         dataType: 'json',
-        async: true,
+        async: false,
         success: function(msg) {
             console.log(JSON.stringify(msg));
             
@@ -830,6 +851,7 @@ function getLinkConfig() {
 
 function getUserList() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get Userlist...");
     
     $.ajax({
@@ -916,11 +938,14 @@ function getUserList() {
                $("#hfUserManagementUser").val(data[0]);
                $("#dlgUserManagementChangeUser").modal('show');
             });
+            
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load User config...");
+            $("#dlgWait").hide();
         }
     });
 };
@@ -928,6 +953,7 @@ function getUserList() {
 
 function getNodeList() {
     
+    $("#dlgWait").show();
     $("#lblDesc").text("Get Nodes...");
     
     $.ajax({
@@ -985,11 +1011,14 @@ function getNodeList() {
                     }
                 ]
             });
+            
+            $("#dlgWait").hide();
         },
         error: function (msg) {
             console.log(JSON.stringify(msg));
 
             $("#lblDesc").text("Failed to load Nodes...");
+            $("#dlgWait").hide();
         }
     });
 };
