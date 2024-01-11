@@ -207,8 +207,6 @@ function initWebEventReader() {
                     tileCheck();
                 };
             };
-            
-            g_bWaitingEvent = false;
         };
     }, 1000);
 };
@@ -225,7 +223,7 @@ function readWebEvents() {
         contentType: 'application/json; charset=utf-8',
         crossDomain: true,
         dataType: 'json',
-        async: false,
+        async: true,
         headers: {
             "accept": "application/json",
             "Access-Control-Allow-Origin": "*",
@@ -470,6 +468,8 @@ function readWebEvents() {
                 };
                 break;
             };
+            
+            g_bWaitingEvent = false;
         },
         error: function (msg) {
 
@@ -481,6 +481,8 @@ function readWebEvents() {
 
                 $("#imgConnState").attr("src", "disconnected.png");
             };
+            
+            g_bWaitingEvent = false;
         }
     });
 };
@@ -586,6 +588,21 @@ function showMapView() {
                 };
                 
                 btnMapBack.addTo(g_pMap);
+                
+                
+                L.Measure = {
+                    linearMeasurement: "Distance measurement",
+                    areaMeasurement: "Area measurement",
+                    meter: "m",
+                    kilometer: "km",
+                    start: "Start",
+                    squareMeter: "m²",
+                    squareKilometers: "km²",
+                    position: "bottomleft"
+                };
+
+                var measure = L.control.measure({}).addTo(g_pMap);
+
                 
                 
                 //show device labels
