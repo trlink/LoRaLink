@@ -458,11 +458,13 @@ int DATA_IND(byte *pResult, uint32_t dwMsgID, uint32_t dwSenderID, uint32_t dwRe
 
 
 
-int PROTOCOL_MSG_CONF(byte *pResult, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwMsgID)
+int PROTOCOL_MSG_CONF(byte *pResult, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwMsgID, bool bFailed)
 {
   //variables
   ///////////
   _sSkyNetProtocolMessage msg;
+  char szData[2];
+  int  nPos = 0;
 
   #if SKYNET_PROTO_DEBUG == 1
     Serial.print(F("[SKYNETP] create PROTOCOL_MSG_CONF --> Sender: "));
@@ -472,11 +474,14 @@ int PROTOCOL_MSG_CONF(byte *pResult, uint32_t dwSenderID, uint32_t dwReceiverID,
     Serial.print(F(", MsgID: "));
     Serial.println(dwMsgID);
   #endif
+
+  memset(szData, 0, sizeof(szData));
+  szData[nPos++] = (byte)bFailed;
    
   prepareHeader(&msg, dwMsgID, dwSenderID, dwReceiverID, dwSenderID, 0, (SKYNET_SUBCMD_CONF << 4) + SKYNET_CMD_PROTOCOL_MSG, 0);
 
-  msg.nDataLen  = 0;
-  msg.pData     = NULL;
+  msg.nDataLen  = 1;
+  msg.pData     = (byte*)&szData;
   
   return encodeSkyNetProtocolMessage(&msg, pResult);
 };

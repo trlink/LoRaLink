@@ -8,7 +8,7 @@
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
   #define LORALINK_HARDWARE_SPIFFS              0       //device has an internal spi ffs (not longer supported)
-  #define LORALINK_HARDWARE_BATSENSE            0       //device has a power sensor (Resistor at analog port)
+  #define LORALINK_HARDWARE_BATSENSE            0       //device has a power sensor 
   #define LORALINK_HARDWARE_LED                 1       //Device has LEDs
   #define LORALINK_HARDWARE_GPS                 1       //Device has GPS
   #define LORALINK_HARDWARE_WIFI                1       //device has WiFi
@@ -32,7 +32,7 @@
   //////////
   
   //for t-beam devices uncomment this line
-  #define LORALINK_HARDWARE_TBEAM
+  //#define LORALINK_HARDWARE_TBEAM
 
   //for heltec
   //#define LORALINK_HARDWARE_ESP32V3
@@ -40,10 +40,23 @@
   //select ESP32 Dev Module and set the following:
   //Flash Size: 4MB
   //Partition Scheme: Default 4MB SPIFFS, 1.2MB APP
-  //#define LORALINK_HARDWARE_ESP32
+  #define LORALINK_HARDWARE_ESP32
 
   //without modem (ip only nodes)
   //#define LORALINK_HARDWARE_ESP32_NOMODEM
+
+
+  //T-Echo
+  //add the following URL to boardmanager: 
+  //https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+  //got to the boardmanager and download the Adafruit nrf52 toolchain...
+  //under boards select Nordic nRF52840 DK
+  //
+  //install (some of) libraries from the official t-echo github repo:
+  //https://github.com/Xinyuan-LilyGO/T-Echo
+  //
+  //#define LORALINK_HARDWARE_TECHO
+  
     
 
 
@@ -65,7 +78,6 @@
     //includes
     //////////
     #include "Arduino.h"
-    #include <driver/adc.h>
     #include <esp_task_wdt.h>
     #include <SPI.h>
     #include <SX126XLT.h>
@@ -160,7 +172,6 @@
     //includes
     //////////
     #include "Arduino.h"
-    #include <driver/adc.h>
     #include <esp_task_wdt.h>
     #include <SPI.h>
     #include <SX127XLT.h>
@@ -253,7 +264,6 @@
     //includes
     //////////
     #include "Arduino.h"
-    #include <driver/adc.h>
     #include <esp_task_wdt.h>
     #include <SPI.h>
     #include <SX127XLT.h>
@@ -348,7 +358,6 @@
     //includes
     //////////
     #include "Arduino.h"
-    #include <driver/adc.h>
     #include <esp_task_wdt.h>
     #include <SPI.h>
     #include <SX127XLT.h>
@@ -446,4 +455,104 @@
     #endif
   #endif
 
+
+
+  #ifdef LORALINK_HARDWARE_TECHO
+    //includes
+    //////////
+    #include "Arduino.h"
+    #include <SPI.h>
+    #include <SX126XLT.h>
+    #if LORALINK_HARDWARE_WIFI == 1
+      #include <DNSServer.h>
+      #include <EasyDDNS.h>
+    #endif
+    #if LORALINK_HARDWARE_SDCARD == 1
+      #include <SD.h>
+    #endif
+    #if LORALINK_HARDWARE_SPIFFS == 1
+      #include <SPIFFS.h>  
+    #endif
+    #include <axp20x.h>             //https://github.com/lewisxhe/AXP202X_Library
+
+
+    
+    //general hardware options
+    //////////////////////////
+    #define LORALINK_MODEM_SX126x
+    
+
+
+    #define LORALINK_HARDWARE_NAME  F("T-Echo WiFi LoRa (SX1276) 433MHz")
+    #define LORALINK_FIRMWARE_FILE  "/TEcho.bin"
+    #define LORALINK_HARDWARE_LORA  1       //device has a lora modem
+
+    
+    //utility defines
+    #define ResetWatchDog           esp_task_wdt_reset
+
+
+    //variables
+    ///////////
+    extern AXP20X_Class *g_pAxp;
+
+    //includes
+    //////////
+    #if LORALINK_HARDWARE_GPS == 1
+      #include <TinyGPS.h>
+      
+      #define GPS_RX_PIN                      34
+      #define GPS_TX_PIN                      12
+    #endif
+
+    //sdcard config
+    #if LORALINK_HARDWARE_SDCARD == 1
+      #define LORALINK_HARDWARE_SDCARD_MISO 4
+      #define LORALINK_HARDWARE_SDCARD_MOSI 25
+      #define LORALINK_HARDWARE_SDCARD_SCK  13
+      #define LORALINK_HARDWARE_SDCARD_CS   2
+    #endif
+
+
+
+    //defines
+    /////////
+    #define PMU_IRQ_PIN                       35
+    #define USER_BUTTON                       38
+    #define LORALINK_HARDWARE_STATUS_LED_PIN  LED_BUILTIN
+
+    #if LORALINK_HARDWARE_LED == 1
+      #define LORALINK_HARDWARE_TX_LED_PIN 33
+    #endif
+  
+    
+    #if LORALINK_HARDWARE_OLED == 1
+      #include <Wire.h>
+      #include <Adafruit_GFX.h>
+      #include <Adafruit_SSD1306.h>
+
+      #define SCREEN_WIDTH 128 // OLED display width, in pixels
+      #define SCREEN_HEIGHT 64 // OLED display height, in pixels
+      #define LORALINK_HARDWARE_OLED_RESET      -1   // Reset pin # (or -1 if sharing Arduino reset pin)
+      #define LORALINK_HARDWARE_SCREEN_ADDRESS  0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+      #define LORALINK_HARDWARE_OLED_SDA        SDA
+      #define LORALINK_HARDWARE_OLED_SCL        SCL
+      extern Adafruit_SSD1306                   g_display;
+    #endif       
+
+    
+
+    
+    #if LORALINK_HARDWARE_LORA == 1
+      //LoRa Modem defines
+      #define LORALINK_MODEM_TYPE              DEVICE_SX1278
+      #define LORALINK_MODEM_SCK               LORA_SCK        
+      #define LORALINK_MODEM_MISO              LORA_MISO       
+      #define LORALINK_MODEM_MOSI              LORA_MOSI       
+      #define LORALINK_MODEM_SS                LORA_CS         
+      #define LORALINK_MODEM_RST               LORA_RST   
+      #define LORALINK_MODEM_DI0               -1
+      #define LORALINK_MODEM_BUSY              LORA_IRQ
+    #endif
+  #endif
 #endif

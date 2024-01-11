@@ -26,7 +26,11 @@
 
 
 
-
+//user-table definition
+//
+//this table stores the user data
+//
+/////////////////////////////////////////////////
 #define USERTABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/user.tbl")).c_str()
 #define USERTABLE_SIZE 9
 
@@ -46,7 +50,14 @@ const int nUserTableDef[] =
 
 
 
-
+//node-table definition
+//
+//this table stores the nodes data (no routing 
+//information). The data is persistant, it will
+//not be removed, when the node is not longer
+//reachable.
+//
+/////////////////////////////////////////////////
 #define NODETABLE_FILE (char*)(String(LORALINK_DATA_ROOT) + String("/nodes.tbl")).c_str()
 #define NODETABLE_SIZE 9
 
@@ -58,7 +69,7 @@ const int nNodeTableDef[] =
   sizeof(int),                      //dev type
   sizeof(float),                    //dev location Lat
   sizeof(float),                    //dev location Lon
-  sizeof(char),                     //location orientation
+  sizeof(char),                     //location orientation (unused)
   sizeof(uint32_t),                 //last heard
   sizeof(int),                      //RSSI
   sizeof(float)                     //SNR
@@ -66,7 +77,12 @@ const int nNodeTableDef[] =
 
 
 
-
+//scheduler-table definition
+//
+//this table stores the schedules or tasks which
+//should be executed in fixed intervals.
+//
+/////////////////////////////////////////////////
 #define SCHEDULERTABLE_FILE       (char*)(String(LORALINK_DATA_ROOT) + String("/schedule.tbl")).c_str()
 #define SCHEDULERTABLE_SIZE       7
 #define SCHEDULERTABLE_DATA_SIZE  200

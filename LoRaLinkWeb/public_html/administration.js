@@ -1064,6 +1064,12 @@ function getRouting() {
                     },
                     {
                         title: 'Type'
+                    },
+                    {
+                        title: 'Hop Count'
+                    },
+                    {
+                        title: 'Dev Type'
                     }
                 ]
             });

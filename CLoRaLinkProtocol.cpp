@@ -2102,7 +2102,7 @@ bool CLoRaLinkProtocol::enqueueLoRaLinkMessage(uint32_t dwReceiverID, byte *pDat
   //variables
   ///////////
   bool                  bRes       = true;
-  _sSkyNetRoutingEntry  *route;
+  _sSkyNetRoutingEntry  route;
   byte                  *pDataAnswer = new byte[SKYNET_PROTO_MAX_PACKET_LEN + 1];
   uint32_t              dwMsgID = this->m_pSkyNetConnection->getMessageID();
   int                   nLen;
@@ -2112,13 +2112,11 @@ bool CLoRaLinkProtocol::enqueueLoRaLinkMessage(uint32_t dwReceiverID, byte *pDat
     Serial.println(dwReceiverID);
   #endif
   
-  route = SearchBestMatchingRoute(dwReceiverID);
-
-  if(route != NULL)
+  if(SearchBestMatchingRoute(dwReceiverID, (_sSkyNetRoutingEntry*)&route) == true)
   {
-    nLen = DATA_IND(pDataAnswer, dwMsgID, DeviceConfig.dwDeviceID, dwReceiverID, DeviceConfig.dwDeviceID, route->dwViaNode, pData, nDataLen);
+    nLen = DATA_IND(pDataAnswer, dwMsgID, DeviceConfig.dwDeviceID, dwReceiverID, DeviceConfig.dwDeviceID, route.dwViaNode, pData, nDataLen);
 
-    this->m_pSkyNetConnection->enqueueMsg(dwReceiverID, dwMsgID, route->pConnHandler->getTaskID(), route->pConnHandler->getConnectionType(), pDataAnswer, nLen, true);
+    this->m_pSkyNetConnection->enqueueMsg(dwReceiverID, dwMsgID, route.pConnHandler->getTaskID(), route.pConnHandler->getConnectionType(), pDataAnswer, nLen, true);
 
     #if CLRP_DEBUG == 1
       Serial.print(F("[CLRLP] startTx: send DATA via: "));

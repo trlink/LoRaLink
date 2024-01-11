@@ -40,6 +40,7 @@ var g_bTileDownload   = false;
 var g_bOnlineTiles    = false;
 var g_bPoisChanged    = false;
 var g_bRecordTrack    = false;
+var g_bWaitingEvent   = false;
 
 
 var strChatHeadEntry = `<tr class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
@@ -144,56 +145,70 @@ function initWebEventReader() {
     
     //init event handler
     var init = setInterval(function () {
-        readWebEvents();
-        
-        //dwonload tiles one by one...
-        //had to also use a bool to avoid async downloading of tiles, which 
-        //crashed the esp (even if async set to false, i had multiple uploads)
-        //on tbeam check & upload freezed the webserver process, so download
-        //will start after the tiles are checked...
-        if((g_bTileDownload === false) && (g_bOnlineTiles === true) && (g_aTileCheck.length <= 0)) { 
+        //when the browser has connectivity issues, or runs in background,
+        //i saw, that the timer was still raised, but the callback function
+        //was not called...
+        //this resulted in hunderds of queries, when the dev came back, or 
+        //the browser got back to front...
+        //so, this should avoid sending new requests, when the other req was 
+        //not finihed, but removes the timer event...
+        if(g_bWaitingEvent === false) {
             
-            if($("#pbTileDownloader").hasClass("bg-success") === false) {
-                $("#pbTileDownloader").addClass("bg-success");
-                $("#pbTileDownloader").removeClass("bg-warning");
-                
-                //reset progress bar
-                $("#pbTileDownloader").attr("aria-valuenow", "0");
-                $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
-                $("#pbTileDownloader").css("width", "0%");
-            }
-            else {
-                if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileDownloader.length) {
-                    $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
-                    $("#pbTileDownloader").attr("aria-valuenow", "0");
-                };
-            };
+            g_bWaitingEvent = true;
             
-            tileDownloader();
-        };
+            readWebEvents();
 
-        //check if tiles exist
-        if(g_bOnlineTiles === true) {
-            
-            if(g_aTileCheck.length > 0) {
-                if($("#pbTileDownloader").hasClass("bg-success") === true) {
-                    $("#pbTileDownloader").removeClass("bg-success");
-                    $("#pbTileDownloader").addClass("bg-warning");
+            //dwonload tiles one by one...
+            //had to also use a bool to avoid async downloading of tiles, which 
+            //crashed the esp (even if async set to false, i had multiple uploads)
+            //on tbeam check & upload freezed the webserver process, so download
+            //will start after the tiles are checked...
+            if((g_bTileDownload === false) && (g_bOnlineTiles === true) && (g_aTileCheck.length <= 0)) { 
+
+                if($("#pbTileDownloader").hasClass("bg-success") === false) {
+                    $("#pbTileDownloader").addClass("bg-success");
+                    $("#pbTileDownloader").removeClass("bg-warning");
 
                     //reset progress bar
                     $("#pbTileDownloader").attr("aria-valuenow", "0");
-                    $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                    $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
                     $("#pbTileDownloader").css("width", "0%");
                 }
                 else {
-                    if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileCheck.length) {
-                        $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                    if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileDownloader.length) {
+                        $("#pbTileDownloader").attr("aria-valuemax", g_aTileDownloader.length);
                         $("#pbTileDownloader").attr("aria-valuenow", "0");
                     };
                 };
 
-                tileCheck();
+                tileDownloader();
             };
+
+            //check if tiles exist
+            if(g_bOnlineTiles === true) {
+
+                if(g_aTileCheck.length > 0) {
+                    if($("#pbTileDownloader").hasClass("bg-success") === true) {
+                        $("#pbTileDownloader").removeClass("bg-success");
+                        $("#pbTileDownloader").addClass("bg-warning");
+
+                        //reset progress bar
+                        $("#pbTileDownloader").attr("aria-valuenow", "0");
+                        $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                        $("#pbTileDownloader").css("width", "0%");
+                    }
+                    else {
+                        if(parseInt($("#pbTileDownloader").attr("aria-valuemax")) < g_aTileCheck.length) {
+                            $("#pbTileDownloader").attr("aria-valuemax", g_aTileCheck.length);
+                            $("#pbTileDownloader").attr("aria-valuenow", "0");
+                        };
+                    };
+
+                    tileCheck();
+                };
+            };
+            
+            g_bWaitingEvent = false;
         };
     }, 1000);
 };
@@ -605,6 +620,7 @@ function showMapView() {
 function closeMapView() {
     //reset markers
     g_pMarkerMe = null;
+    g_pMap      = null;
     
     $("#divMapContainer").hide();
     toggleMessageView(false);
@@ -1889,12 +1905,23 @@ function loadShoutOutMsgs(dwMsgID) {
             for(let n = 0; n < msgs.length; ++n) {
                 
                 var strMsg = String(msgs[n].Msg);
+                var strSenderDev = decodeURI(msgs[n].Sender).substr(decodeURI(msgs[n].Sender).indexOf("@") + 1);
+                
+                        
+                $("#hfNodeName").val()
 
                 strMsg = decodeURI(strMsg);
                 
                 strHTML = "<tr>";
                 strHTML += "<td style='width: 120px;'>" + msgs[n].SentTime + "</td>";
-                strHTML += "<td style='width: 150px; overflow: hidden;'><a onclick='javascript: showNewChatDialog(\"" + decodeURI(msgs[n].Sender) + "\");'>" + decodeURI(msgs[n].Sender) + "</a></td>";
+                
+                if($("#hfNodeName").val() !== strSenderDev) {
+                    strHTML += "<td style='width: 150px; overflow: hidden;'><a onclick='javascript: showNewChatDialog(\"" + decodeURI(msgs[n].Sender) + "\");'>" + decodeURI(msgs[n].Sender) + "</a></td>";
+                }
+                else {
+                    strHTML += "<td style='width: 150px; overflow: hidden;'><span>" + decodeURI(msgs[n].Sender) + "</span></td>";
+                };
+                
                 strHTML += "<td>" + strMsg + "</td>";
                 strHTML += "</tr>";
                 
@@ -2709,6 +2736,7 @@ function showTracks() {
                 strHTML += "<tr><td><span>" + msg["Tracks"][i].Time + "</span></td><td><span>" + decodeURI(msg["Tracks"][i].Desc) + (msg["Tracks"][i].Active === 1 ? " (recording)" : "") + "</span></td>" +
                         "<td><a onclick='javascript: exportTrack(" + msg["Tracks"][i].ID + ", \"" + decodeURI(msg["Tracks"][i].Desc) + "\");'><img style='margin-left: 12px; height: 20px;' src='/images/disk.png' alt='export track'></a></td>" +
                         "<td><a onclick='javascript: deleteTrack(" + msg["Tracks"][i].ID + ");'><img style='margin-left: 12px; height: 20px;' src='/images/trash.png' alt='delete track'></a></td>" +
+                        "<td><a onclick='javascript: viewTrack(" + msg["Tracks"][i].ID + ");'><img style='margin-left: 12px; height: 20px;' src='/images/eye.png' alt='show track'></a></td>" +
                         "</tr>";
             };
             
@@ -2759,6 +2787,81 @@ function deleteTrack(trackID) {
 
 
 
+function waypointComparer( a, b ) {
+  if ( Date.parse(a.Time) < Date.parse(b.Time )) {
+    return -1;
+  }
+  if ( a.ChatRcpt > b.ChatRcpt ){
+    return 1;
+  }
+  return 0;
+}
+
+
+function viewTrack(trackID) {
+    if(g_pMap !== null) {
+        $.ajax({
+            url: g_strServer + 'api/api.json',
+            type: 'POST',
+            data: '{"chatcmd": "getTrackData", ' +
+                  ' "userID": ' + $("#hfUserID").val() + ', ' +
+                  ' "TrackID": ' + trackID + ', ' +
+                  ' "hash": "' + $("#hfPwdHash").val() + '"}',
+            contentType: 'application/json; charset=utf-8',
+            crossDomain: true,
+            dataType: 'json',
+            async: true,
+            headers: {
+                "accept": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                "Access-Control-Allow-Methods": "GET, POST"
+            },
+            success: function(msg) {
+                //variables
+                ///////////
+                var aPolyLine = [];
+                var aLine = [];
+
+                console.log(JSON.stringify(msg));
+
+
+                msg["Waypoints"].sort(waypointComparer);
+
+                for(var i = 0; i < msg["Waypoints"].length; ++i) {
+                    aPolyLine.push([msg["Waypoints"][i].Lat, msg["Waypoints"][i].Lon]);
+                }
+                
+                aLine.push(aPolyLine);
+                
+
+                L.polyline(aLine[0]).addTo(g_pMap);
+
+                L.polylineDecorator(aLine, {
+                    patterns: [{
+                        offset: 25,
+                        repeat: 50,
+                        symbol: L.Symbol.arrowHead({
+                            pixelSize: 15,
+                            pathOptions: {
+                                fillOpacity: 1,
+                                weight: 0
+                            }
+                        })
+                    }]
+                }).addTo(g_pMap);
+            },
+            error: function (msg) {
+
+                alert("Unable to load tracks...");
+                console.log(JSON.stringify(msg));
+            }
+        });
+    };
+};
+
+
+
 function exportTrack(trackID, strName) {
     $.ajax({
         url: g_strServer + 'api/api.json',
@@ -2784,6 +2887,7 @@ function exportTrack(trackID, strName) {
             
             console.log(JSON.stringify(msg));
             
+            msg["Waypoints"].sort(waypointComparer);
             
             //create gpx header
             strGPX  = '<?xml version="1.0"?>' +

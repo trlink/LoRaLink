@@ -1536,14 +1536,18 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     {
       //variables
       ///////////
-      _sListItem            *item = g_pRoutingEntries->getList();
+      _sListItem            *item       = g_pRoutingEntries->getList();
+      CWSFFileDBRecordset   *pRecordset = new CWSFFileDBRecordset(g_pRoutingTable);
       _sSkyNetRoutingEntry  *routing; 
-      char buffer[200];
+      char                  buffer[200];
+      uint32_t              dwData;
+      int                   nData;
       
       memset(buffer, 0, sizeof(buffer));
       strcpy_P((char*)&buffer, PSTR("{\"Routes\": ["));
-      resp->println(buffer);
+      resp->print(buffer);
 
+      //get L0 routing
       if(g_pRoutingEntries->getItemCount() > 0)
       {
         while(item != NULL)
@@ -1554,26 +1558,36 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           {
             memset(buffer, 0, sizeof(buffer));
             sprintf_P((char*)&buffer, PSTR("["));
-            resp->println(buffer);
+            resp->print(buffer);
 
             //dev id        
             memset(buffer, 0, sizeof(buffer));
             sprintf_P((char*)&buffer, PSTR("\"%u\", "), routing->dwDeviceID);
-            resp->println(buffer);
+            resp->print(buffer);
             
             //transport node id  
             memset(buffer, 0, sizeof(buffer));
             sprintf_P((char*)&buffer, PSTR("\"%u\", "), routing->dwViaNode);
-            resp->println(buffer);
+            resp->print(buffer);
 
             //Conn type
             memset(buffer, 0, sizeof(buffer));
-            sprintf_P((char*)&buffer, PSTR("\"%i\""), routing->pConnHandler->getConnectionType());
-            resp->println(buffer);
+            sprintf_P((char*)&buffer, PSTR("\"%i\", "), routing->pConnHandler->getConnectionType());
+            resp->print(buffer);
+
+            //hop count
+            memset(buffer, 0, sizeof(buffer));
+            sprintf_P((char*)&buffer, PSTR("\"%i\", "), routing->dwHopCount);
+            resp->print(buffer);
+
+            //Dev type
+            memset(buffer, 0, sizeof(buffer));
+            sprintf_P((char*)&buffer, PSTR("\"%i\""), routing->nDevType);
+            resp->print(buffer);
 
             memset(buffer, 0, sizeof(buffer));
             sprintf_P((char*)&buffer, PSTR("]"));
-            resp->println(buffer);
+            resp->print(buffer);
         
             item = item->pNext;
               
@@ -1587,6 +1601,64 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
           
           ResetWatchDog();
         };
+
+        if(pRecordset->haveValidEntry() == true)
+        {
+          memset(buffer, 0, sizeof(buffer));
+          sprintf_P((char*)&buffer, PSTR(", "));
+          resp->println(buffer);
+        };
+      };
+
+      //get routing from database
+      //> L0
+      while(pRecordset->haveValidEntry() == true)
+      {
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("["));
+        resp->print(buffer);
+
+        //dev id    
+        pRecordset->getData(0, (void*)&dwData, sizeof(dwData));    
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("\"%u\", "), 0);
+        resp->print(buffer);
+        
+        //transport node id  
+        pRecordset->getData(1, (void*)&dwData, sizeof(dwData)); 
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("\"%u\", "), dwData);
+        resp->print(buffer);
+
+        //Conn type
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("\"%i\", "), 0);
+        resp->print(buffer);
+
+        //hop count  
+        pRecordset->getData(2, (void*)&dwData, sizeof(dwData)); 
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("\"%u\", "), dwData);
+        resp->print(buffer);
+
+        //dev type  
+        pRecordset->getData(3, (void*)&nData, sizeof(nData)); 
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("\"%i\""), nData);
+        resp->print(buffer);
+
+        memset(buffer, 0, sizeof(buffer));
+        sprintf_P((char*)&buffer, PSTR("]"));
+        resp->print(buffer);
+
+        pRecordset->moveNext();
+
+        if(pRecordset->haveValidEntry() == true)
+        {
+          memset(buffer, 0, sizeof(buffer));
+          sprintf_P((char*)&buffer, PSTR(", "));
+          resp->println(buffer);
+        };
       };
 
       // we are done, send the footer
@@ -1595,6 +1667,7 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       resp->println(buffer);
 
       docResp.clear();
+      delete pRecordset;
       
       return;
     };
@@ -3606,7 +3679,7 @@ void setup()
   //update schedules after reboot
   g_pDbTaskScheduler->rescheduleAfterTimechange();
 
- 
+
 
   #if LORALINK_HARDWARE_LORA == 1
     //start Modem
@@ -3817,7 +3890,7 @@ void loop()
   long            lCheckTimer = 0;
 
   esp_task_wdt_init(180, false);
-  
+
   while(true)
   {
     g_pUserButton->update();
@@ -4248,8 +4321,7 @@ void ModemDataTask(void *pParam)
       {
         lInfoCardSwitchTimer   = millis() + INFO_CARD_SWITCH_INTERVAL;
         nInfoCard             += 1;
-        //mem page: 
-        nInfoCard             = 1;
+        //mem page: nInfoCard             = 1;
         
         if(nInfoCard >= nMaxCard)
         {

@@ -14,6 +14,8 @@
 /////////
 #define SKYNET_CONN_DEBUG                 1
 #define SKYNET_CONN_INFO                  1
+#define SKYNET_CONN_ERROR                 1
+
 
 #define SKYNET_CONN_TYPE_LORA             1
 #define SKYNET_CONN_TYPE_IP_CLIENT        2

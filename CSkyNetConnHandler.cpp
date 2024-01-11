@@ -125,6 +125,10 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
     //check if sender dev is configurred
     if((msg.nSenderID > 0) && (msg.nSenderID != DeviceConfig.dwDeviceID))
     {
+      //update node timeout, so that the
+      //node remains in the routing table
+      UpdateNodeTimeout(msg.nSenderID);
+      
       //check sub-commands
       switch((msg.bMsgType & 0xF0) >> 4)
       {
@@ -274,14 +278,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                     Serial.println(msg.nReceiverID);
                   #endif
   
-                  dwOldMsgID  = msg.dwMsgID;
-                  msg.dwMsgID = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
-                    
-                  if(this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true) == true)
-                  {
-                    nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, dwOldMsgID);
-                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, dwOldMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
-                  };
+                  nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID, !this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true));
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                 };
               };
             };
@@ -294,7 +292,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
               ///////////
               uint32_t              dwMsgID;
               uint32_t              dwNewVia;
-              _sSkyNetRoutingEntry  *route;
+              _sSkyNetRoutingEntry  route;
+              bool                  bForwarded = false;
               
               #if SKYNET_CONN_INFO == 1
                 Serial.print(F("[CHandler] HELLO_REQ from: "));
@@ -315,35 +314,36 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
               {
                 //store sender as via
                 dwNewVia   = msg.nSenderID;
-  
+                dwMsgID    = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
+                
                 //check if we got a request from a device 
                 //for another device (forwarded request). 
                 //if true, check the routing table, if we have 
                 //another (maybe direct route) 
                 if((dwNewVia != 0) && (dwNewVia != msg.nOriginID))
                 {
-                  route = SearchBestMatchingRoute(msg.nOriginID);
-  
-                  if(route != NULL)
+                  if(SearchBestMatchingRoute((msg.nOriginID != 0 ? msg.nOriginID : msg.nSenderID), (_sSkyNetRoutingEntry*)&route) == true)
                   {
-                    if(route->dwViaNode != dwNewVia)
-                    {
-                      #if SKYNET_CONN_INFO == 1
-                        Serial.print(F("[CHandler] HELLO_REQ for: "));
-                        Serial.print(msg.nOriginID);
-                        Serial.print(F(" returned new Via: "));
-                        Serial.println(route->dwViaNode);
-                      #endif
-  
-                      dwNewVia = route->dwViaNode;
-                    };
+                    #if SKYNET_CONN_INFO == 1
+                      Serial.print(F("[CHandler] HELLO_REQ for: "));
+                      Serial.print(msg.nOriginID);
+                      Serial.print(F(" returned new Via: "));
+                      Serial.println(route.dwViaNode);
+                    #endif
+
+                    bForwarded  = true;
+                    dwNewVia    = route.dwViaNode;
+
+                    nAnswerLen = HELLO_IND(pAnswer, dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, dwNewVia, DeviceConfig.szDevName, DeviceConfig.nDeviceType & 0xFF, DeviceConfig.fLocN, DeviceConfig.fLocE, DeviceConfig.cPosOrientation, 0);
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, dwMsgID, route.pConnHandler->getTaskID(), route.pConnHandler->getConnectionType(), pAnswer, nAnswerLen, false);       
                   };
                 };
-                
-                dwMsgID    = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
-                nAnswerLen = HELLO_IND(pAnswer, dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, dwNewVia, DeviceConfig.szDevName, DeviceConfig.nDeviceType & 0xFF, DeviceConfig.fLocN, DeviceConfig.fLocE, DeviceConfig.cPosOrientation, 0);
-                
-                ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+
+                if(bForwarded == false)
+                {
+                  nAnswerLen = HELLO_IND(pAnswer, dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, msg.nSenderID, DeviceConfig.szDevName, DeviceConfig.nDeviceType & 0xFF, DeviceConfig.fLocN, DeviceConfig.fLocE, DeviceConfig.cPosOrientation, 0);
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+                };
               }
               else
               {
@@ -354,11 +354,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                     Serial.println(msg.nReceiverID);
                   #endif
                   
-                  if(this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true) == true)
-                  {
-                    nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID);
-                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
-                  };
+                  nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID, !this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true));
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                 };
               };
             };
@@ -437,12 +434,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                   //check if known by sender
                   if((dwDev > 0) && (DeviceConfig.dwDeviceID != dwDev))
                   {
-                    if(FindRoutingEntry(dwDev, (dwDev == msg.nSenderID ? 0 : msg.nSenderID), this->getConnectionType()) == NULL)
-                    {
-                      insertIntoRoutingTable(dwDev, (dwDev == msg.nSenderID ? 0 : msg.nSenderID), (dwDev == msg.nSenderID ? msg.nHopCount : msg.nHopCount + 1), nDevType, this);
-                    };    
-  
-    
+                    insertIntoRoutingTable(dwDev, (dwDev == msg.nSenderID ? 0 : msg.nSenderID), (dwDev == msg.nSenderID ? msg.nHopCount : msg.nHopCount + 1), nDevType, this);
+                  
                     //check if node is known by me
                     if(this->isKnownNode(dwDev) == false)
                     { 
@@ -485,11 +478,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                       Serial.println(msg.nReceiverID);
                     #endif
                     
-                    if(this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true) == true)
-                    {
-                      nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID);
-                      ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
-                    };
+                    nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID, !this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true));
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                   };
                 };
               };
@@ -544,9 +534,6 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                   Serial.print(F("[CHandler] forward msg to: "));
                   Serial.println(msg.nReceiverID);
                 #endif
-  
-                dwOldMsgID  = msg.dwMsgID;
-                msg.dwMsgID = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
                 
                 if(this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true) == false)
                 {
@@ -554,13 +541,13 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                   ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueQueryRequest(msg.nReceiverID, (char*)"", false, 0);
   
                   //send response
-                  nAnswerLen = DATA_CONF(pAnswer, dwOldMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, msg.nSenderID, SKYNET_RESPONSE_NO_ROUTE);
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, dwOldMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
+                  nAnswerLen = DATA_CONF(pAnswer, msg.dwMsgID, DeviceConfig.dwDeviceID, msg.nOriginID, DeviceConfig.dwDeviceID, msg.nSenderID, SKYNET_RESPONSE_NO_ROUTE);
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nOriginID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                 }
                 else
                 {
                   //send receive confirmation 
-                  nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, dwOldMsgID);
+                  nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, dwOldMsgID, false);
                   ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                 };
               };
@@ -716,28 +703,18 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                 //check routing for the origin dev
                 //when orig != sender and not DeviceConfig.dwDeviceID, it's a remote node,
                 //otherwise a local (direct connected) node...  
-                if(FindRoutingEntry(msg.nOriginID, (((msg.nOriginID == msg.nSenderID) || (msg.nReceiverID == 0)) ? 0 : msg.nSenderID), (int)bDevType) == NULL)
-                {
-                  insertIntoRoutingTable(msg.nOriginID, (((msg.nOriginID == msg.nSenderID) || (msg.nReceiverID == 0)) ? 0 : msg.nSenderID), (msg.nOriginID == msg.nSenderID ? msg.nHopCount : msg.nHopCount + 1), (int)bDevType, this);
-                };
+                insertIntoRoutingTable(msg.nOriginID, (((msg.nOriginID == msg.nSenderID) || (msg.nReceiverID == 0)) ? 0 : msg.nSenderID), (msg.nOriginID == msg.nSenderID ? msg.nHopCount : msg.nHopCount + 1), (int)bDevType, this);
                 
                 //remote node, forwarded, if not known, put the sender into routing
                 if(msg.nSenderID != msg.nOriginID)
                 {
-                  //check if remote device (local) node exist
-                  if(FindRoutingEntry(msg.nSenderID, 0, (int)bDevType) == NULL)
-                  {
-                    insertIntoRoutingTable(msg.nSenderID, 0, 0, (int)bDevType, this);
-                  };
+                  insertIntoRoutingTable(msg.nSenderID, 0, 0, (int)bDevType, this);
                 };
   
                 //check if we know the transport node...
                 if((msg.nViaID != 0) && (msg.nViaID != DeviceConfig.dwDeviceID) && (msg.nViaID != msg.nSenderID))
                 {
-                  if(FindRoutingEntry(msg.nViaID, msg.nSenderID, (int)bDevType) == NULL)
-                  {
-                    insertIntoRoutingTable(msg.nViaID, msg.nSenderID, 1, (int)bDevType, this);
-                  };
+                  insertIntoRoutingTable(msg.nViaID, msg.nSenderID, 1, (int)bDevType, this);
                 };
 
 
@@ -883,7 +860,8 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                     Serial.println(msg.nViaID);
                   #endif
 
-                  
+                  //remove the routing entry (L1 upwards)
+                  RemoveRoutingEntry(msg.nReceiverID, msg.nViaID);
                 };
               };
             };
@@ -908,7 +886,22 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                 Serial.println(msg.nHopCount);
               #endif
               
-              ((CSkyNetConnection*)this->m_pSkyNetConnection)->removeConfirmedMessage(msg.nSenderID, msg.dwMsgID);       
+              if(msg.nReceiverID == DeviceConfig.dwDeviceID)
+              {
+                ((CSkyNetConnection*)this->m_pSkyNetConnection)->removeConfirmedMessage(msg.nSenderID, msg.dwMsgID);   
+  
+                if(msg.pData != NULL)
+                {
+                  if((bool)msg.pData[0] == true)
+                  {
+                    #if SKYNET_CONN_INFO == 1
+                      Serial.println(F("[CHandler] PROTOCOL_MSG_CONF: failed"));
+                    #endif
+  
+                    RemoveRoutingEntry(msg.nReceiverID, msg.nSenderID);
+                  };
+                };
+              };
             };
             break;
   
@@ -945,7 +938,7 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                 this->m_nState          = SKYNET_CONN_STATE_CONNECTED;
                 this->m_lKeepAliveTimer = millis() + SKYNET_CONN_TIMEOUT_KEEPALIVE;
   
-                //check if in node table
+                //check if in node table (has not send a HELLO_IND)
                 if(this->isKnownNode(msg.nSenderID) == false)
                 { 
                   bSendReq = true;
@@ -953,11 +946,25 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
   
                 if(bSendReq == false)
                 {
-                  //create routing entry for a local connected node
-                  //(transport ID = 0) for the connection type
-                  if(FindRoutingEntry(msg.nSenderID, (msg.nOriginID == msg.nSenderID ? 0 : msg.nOriginID), this->m_nConnType) == NULL)
+                  if((msg.nOriginID == msg.nSenderID) || (msg.nOriginID == 0))
                   {
-                    bSendReq = true;
+                    //if the sender is not in the routing table (L0),
+                    //send a request to send a HELLO_IND
+                    if(FindRoutingEntry(msg.nSenderID, 0) == NULL)
+                    {
+                      bSendReq = true;
+                    };
+
+                    //set origin = sender,
+                    //when orig is 0, avoid sending the 
+                    //request to 0
+                    msg.nOriginID = msg.nSenderID;
+                  }
+                  else
+                  {
+                    //if the sender is not in the routing database (L1),
+                    //send a request to send a HELLO_IND
+                    bSendReq = !isInRoutingDB(msg.nSenderID, msg.nOriginID);
                   };
                 };
   
@@ -1044,14 +1051,9 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                     Serial.print(F("[CHandler] forward msg to: "));
                     Serial.println(msg.nReceiverID);
                   #endif
-                  
-                  if(this->forwardMessage((_sSkyNetProtocolMessage*)&msg, false) == false)
-                  {
-                    //send a query request...
-                    
-  
-                    //send response
-                  }; 
+
+                  nAnswerLen = PROTOCOL_MSG_CONF(pAnswer, DeviceConfig.dwDeviceID, msg.nSenderID, msg.dwMsgID, !this->forwardMessage((_sSkyNetProtocolMessage*)&msg, true));
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(msg.nSenderID, msg.dwMsgID, this->getTaskID(), this->m_nConnType, pAnswer, nAnswerLen, false);
                 };
   
   
@@ -1317,42 +1319,69 @@ bool CSkyNetConnectionHandler::forwardMessage(void *pMessage, bool bConfirm)
   //variables
   ///////////
   _sSkyNetProtocolMessage *pMsg = new _sSkyNetProtocolMessage;
-  _sSkyNetRoutingEntry    *route;
+  _sSkyNetRoutingEntry    route;
   byte                    *pData = new byte[SKYNET_PROTO_MAX_PACKET_LEN + 1];
   int                     nLen;
-
+  
   //create a copy, so we don't mod the pointer, which will be used 
   //later...
   memcpy(pMsg, pMessage, sizeof(_sSkyNetProtocolMessage));
 
   //only when I am not sender, reciever, or origin
   if((DeviceConfig.dwDeviceID != pMsg->nOriginID) && (pMsg->nReceiverID != DeviceConfig.dwDeviceID) && (pMsg->nReceiverID != pMsg->nSenderID) && (pMsg->nReceiverID > 0))
-  {
-    route = SearchBestMatchingRoute(pMsg->nReceiverID);
-    
-    if(route != NULL)      
+  { 
+    if(SearchBestMatchingRoute(pMsg->nReceiverID, (_sSkyNetRoutingEntry*)&route) == true)      
     {
       #if SKYNET_CONN_INFO == 1
-        Serial.print(F("[CHandler] Type: "));
+        Serial.print(F("[CHandler] ForwardMessage: Type: "));
         Serial.print(this->m_nConnType);
         Serial.print(F(" TaskID: "));
         Serial.print(this->getTaskID());
         Serial.print(F(" - found route via: "));
-        Serial.print(route->dwViaNode);
+        Serial.print(route.dwViaNode);
         Serial.print(F(" hop count "));
-        Serial.println(route->dwHopCount);
+        Serial.print(route.dwHopCount);
+        Serial.print(F(" for msg to: "));
+        Serial.println(pMsg->nReceiverID);
       #endif
 
-      if(route->dwViaNode != pMsg->nSenderID)
+      //if the connection is not lora allow forwarding
+      //only to other connections. LoRa connections
+      //are store & forward, so we need to send messages
+      //over the same radio connection.
+      if(this->m_nConnType != SKYNET_CONN_TYPE_LORA)
+      {
+        //route over IP connection: check if data will be 
+        //sent to the receiver over the same taskID, which is 
+        //the same connection
+        if(route.pConnHandler->getConnectionType() == this->m_nConnType)
+        {
+          if(route.pConnHandler->getTaskID() == this->getTaskID())
+          {
+            #if SKYNET_CONN_ERROR == 1
+              Serial.println(F("[CHandler] Route error: routing loop detected (remove route)!"));
+            #endif
+
+            RemoveRoutingEntry(pMsg->nReceiverID, route.dwViaNode);
+
+            delete pMsg;
+            delete pData;
+
+            //try again after removing the route...
+            return this->forwardMessage(pMessage, bConfirm);
+          };
+        };
+      };
+
+     
+      if(route.dwViaNode != pMsg->nSenderID)
       {
         pMsg->nHopCount  += 1;
         pMsg->nSenderID   = DeviceConfig.dwDeviceID;
-        pMsg->nViaID      = route->dwViaNode;
-        pMsg->dwMsgID     = ((CSkyNetConnection*)this->m_pSkyNetConnection)->getMessageID();
-        
+        pMsg->nViaID      = route.dwViaNode;
         
         nLen = encodeSkyNetProtocolMessage(pMsg, pData);
-        ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(route->dwViaNode, pMsg->dwMsgID, route->pConnHandler->getTaskID(), route->pConnHandler->getConnectionType(), pData, nLen, bConfirm);
+        ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsg(route.dwViaNode, pMsg->dwMsgID, route.pConnHandler->getTaskID(), route.pConnHandler->getConnectionType(), pData, nLen, bConfirm);
 
         delete pMsg;
         delete pData;
@@ -1361,13 +1390,13 @@ bool CSkyNetConnectionHandler::forwardMessage(void *pMessage, bool bConfirm)
       }
       else 
       {
-        #if SKYNET_CONN_INFO == 1
+        #if SKYNET_CONN_ERROR == 1
           Serial.println(F("[CHandler] Route error: new Via == Sender - failed to route packet"));
         #endif
       };
     };
 
-    #if SKYNET_CONN_INFO == 1
+    #if SKYNET_CONN_ERROR == 1
       Serial.print(F("[CHandler] Type: "));
       Serial.print(this->m_nConnType);
       Serial.print(F(" TaskID: "));
@@ -1377,7 +1406,7 @@ bool CSkyNetConnectionHandler::forwardMessage(void *pMessage, bool bConfirm)
   }
   else
   {
-    #if SKYNET_CONN_INFO == 1
+    #if SKYNET_CONN_ERROR == 1
       Serial.print(F("[CHandler] Type: "));
       Serial.print(this->m_nConnType);
       Serial.print(F(" MsgID: "));

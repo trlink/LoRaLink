@@ -95,7 +95,7 @@ int KEEPALIVE_IND(byte *pResult, uint32_t dwMsgID, uint32_t dwSenderID);
 
 //this command confirmes a forwarded message, which needs a confirmation
 //that it was transferred to another node
-int PROTOCOL_MSG_CONF(byte *pResult, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwMsgID);
+int PROTOCOL_MSG_CONF(byte *pResult, uint32_t dwSenderID, uint32_t dwReceiverID, uint32_t dwMsgID, bool bFailed);
 
 
 //this commands register a device locally

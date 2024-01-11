@@ -34,7 +34,7 @@ void StartWebservers(WebServerOnPostRequest apiHandler)
 
   
   // Additionally, we create an HTTPServer for unencrypted traffic
-  g_insecureServer = new HTTPServer();
+  g_insecureServer = new HTTPServer(80, MAX_WEBSERVER_CONNECTIONS, 0);
 
   //setup handler
   ResourceNode *nodeRoot      = new ResourceNode("/", "GET", &handleRoot);
