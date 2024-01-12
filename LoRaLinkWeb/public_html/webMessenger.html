@@ -156,12 +156,12 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                     <thead>
                         <tr>
                             <div class="form-group has-search">
-                                <input id="inpSearchChat" type="text" class="form-control" placeholder="Search Chat">
+                                <input id="inpSearchChat" type="text" class="form-control" placeholder="Search Chat" onkeyup="javascript: searchChat_KeyPress();">
                             </div>
                         </tr>
                     </thead>
                     
-                    <tbody>
+                    <tbody id="tbChatsBody">
                     </tbody>
                 </table>
             </div>
@@ -385,6 +385,12 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                         </table>
                     </div>
                     <div class="modal-footer">
+                        <div class="ml-auto">
+                            <input style="margin-left: 0px; margin-top: 6px;" class="form-check-input" type="checkbox" value="" id="chkShowPOI" aria-describedby="" onclick="javascript: showPOIS();">
+                            <label style="margin-left: 15px;" class="form-check-label" for="chkShowPOI">
+                              Show POI's on Map?
+                            </label>
+                        </div>
                         <button type="button" class="btn btn-secondary" onclick="javascript: importPOI();">Import POI's</button>
                         <button type="button" class="btn btn-secondary" onclick="javascript: exportPOI();">Export POI's</button>
                     </div>

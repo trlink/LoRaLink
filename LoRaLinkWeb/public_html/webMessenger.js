@@ -34,6 +34,7 @@ var g_pRadar          = null;
 var g_pMap            = null;
 var g_pMarkerMe       = null;
 var g_pNodeMarkers    = [];
+var g_aPois           = [];
 var g_aTileDownloader = [];
 var g_aTileCheck      = [];
 var g_bTileDownload   = false;
@@ -43,7 +44,7 @@ var g_bRecordTrack    = false;
 var g_bWaitingEvent   = false;
 
 
-var strChatHeadEntry = `<tr class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
+var strChatHeadEntry = `<tr id="msgid_{CHATID}" class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
                             <td>
                                 <table style="position: relative; width: 100%; table-layout: fixed;">
                                     <tr>
@@ -610,7 +611,9 @@ function showMapView() {
                 
                 
                 //show pois on map
-                addPoisOnMap();
+                if($("#chkShowPOI").prop('checked') === true) {
+                    addPoisOnMap();
+                };
                 
                 //add on click handler which adds the last clicked coordinates to the 
                 //manage poi dialog
@@ -737,6 +740,8 @@ function toggleMessageView(bOpenMessageView) {
     console.log("App width:" + $(window).width());
     
     g_bMessageView = bOpenMessageView;
+    g_pMap         = null;
+    g_aPois        = [];
     
     if($(window).width() < g_nAppMinWidth) {
         
@@ -1245,6 +1250,8 @@ function decryptString(input, key) {
 
 
 
+
+
 function loadChatsFromDevice(bUpdateOnly) {
     
     $("#lblDesc").text("Loading chats and data...");
@@ -1309,7 +1316,7 @@ function loadChatsFromDevice(bUpdateOnly) {
                     strTemp = strTemp.replace("{USERNAME}", strUser);
                     strTemp = strTemp.replace("{NODENAME}", strNode);
                     strTemp = strTemp.replace("{TIME}", g_aChats[n].LastMsgTime);
-                    strTemp = strTemp.replace("{CHATID}", g_aChats[n].ID);
+                    strTemp = strTemp.replaceAll("{CHATID}", g_aChats[n].ID);
                     strTemp = strTemp.replace("{LASTMSG}", strMsg);
                     strTemp = strTemp.replace("{NEWMSGS}", g_aChats[n].UnreadMsgs);
                     
@@ -1371,6 +1378,57 @@ function loadChatsFromDevice(bUpdateOnly) {
         }
     });
 };
+
+
+
+function searchChat_KeyPress() {
+    //variables
+    ///////////
+    var strSearchText = $("#inpSearchChat").val();
+    var bShow = false;
+    var oContact = [];
+    var strMsg = "";
+    
+    if(strSearchText.length >= 3) {
+        for(var n = 0; n < g_aChats.length; ++n) {
+            bShow = false;
+            
+            oContact = getContact(g_aChats[n].ContactID);
+            
+            if(oContact !== null) {
+                if(oContact.Name.toLowerCase().indexOf(strSearchText.toLowerCase()) >= 0) {
+                    bShow = true;
+                };
+                
+                if(oContact.Device.toLowerCase().indexOf(strSearchText.toLowerCase()) >= 0) {
+                    bShow = true;
+                };
+                  
+                if(g_aChats[n].LastMsgTime.indexOf(strSearchText.toLowerCase()) >= 0) {
+                    bShow = true;
+                };
+                
+                strMsg  = decodeURI(g_aChats[n].LastMsgText);
+                
+                if(strMsg.toLowerCase().indexOf(strSearchText.toLowerCase()) >= 0) {
+                    bShow = true;
+                };
+                
+                if(bShow === false) {
+                    $("#msgid_" + g_aChats[n].ID).hide();
+                }
+                else {
+                    $("#msgid_" + g_aChats[n].ID).show();
+                };
+            };
+        };
+    }
+    else {
+        $("#tbChatsBody > tr").each(function(index, tr) {
+            $(tr).show();
+        });
+    };
+}
 
 
 function loadKnownDevices(bUpdateOnly, bCreateMapLabels) {
@@ -2466,6 +2524,28 @@ function showManagePOI() {
 
 
 /**
+ * this function will be called, when the check box in the POI manager
+ * was clicked. If the map is actually open, it will re-add the pois
+ * 
+ * @returns {undefined}
+ */
+function showPOIS() {
+ 
+    if(g_pMap !== null) {
+        for(var n = 0; n < g_aPois.length; ++n) {
+            g_pMap.removeLayer(g_aPois[n]);
+        };
+    };
+    
+    g_aPois = [];
+ 
+    if(($("#chkShowPOI").prop("checked") === true) && (g_pMap !== null)) {
+        addPoisOnMap();
+    };
+};
+
+
+/**
  * this function adds the pois to the map
  * 
  * @returns {undefined}
@@ -2488,10 +2568,12 @@ function addPoisOnMap() {
                 shadowUrl: '/images/marker-shadow.png'
             });
     
-            L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).addTo(g_pMap).bindPopup(
+            var marker = L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).addTo(g_pMap).bindPopup(
                 "<b>POI:</b><br/>" + decodeURI(response["pois"][n].Desc) + "<br/>WGS84: " +
                 response["pois"][n].Latitude + ", " + response["pois"][n].Longitude + "<br/>Loc: " +
                 convertToLocator(response["pois"][n].Longitude, response["pois"][n].Latitude));
+        
+            g_aPois.push(marker);
         };
    });
 };
