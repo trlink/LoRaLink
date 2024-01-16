@@ -28,20 +28,24 @@ var g_fLocalSpeed     = 0.0;
 var g_nLocalSat       = 0;
 var g_nLocalHDOP      = 0;
 var g_lLocalTimeStamp = 0;
-var g_bTrackingActive = false;
-var g_nTrackingType   = 0;
+var g_bTrackingActive = false;      //true if the device sends it's position
+var g_nTrackingType   = 0;          //type of tracking data, the device is sending (emergency, normal)
 var g_pRadar          = null;
 var g_pMap            = null;
-var g_pMarkerMe       = null;
-var g_pNodeMarkers    = [];
-var g_aPois           = [];
-var g_aTileDownloader = [];
-var g_aTileCheck      = [];
-var g_bTileDownload   = false;
-var g_bOnlineTiles    = false;
+var g_pMarkerMe       = null;       //the device marker
+var g_pNodeMarkers    = [];         //node markers (used by the map to change the location on event
+var g_aPois           = [];         //POIs
+var g_aTileDownloader = [];         //array with checked tiles, which need to be downloaded
+var g_aTileCheck      = [];         //array with tiles to check if exist
+var g_bTileDownload   = false;      //true if the device is downloading (and uploading to device) a tile
+var g_bOnlineTiles    = false;      //true if the device is connected to the internat (assume, that tiles can be downloaded)
 var g_bPoisChanged    = false;
-var g_bRecordTrack    = false;
-var g_bWaitingEvent   = false;
+var g_bRecordTrack    = false;      //true if the dev is recording a track
+var g_bWaitingEvent   = false;      //true if timer event is running
+var g_lLastEmergeID   = 0;          //id of the sending dev, when multiple devs are sending, the dialog will be opened again
+var g_bEmergencyConf  = false;      //received emergency pos confirmed
+var g_strMapView      = "map";      //can be map or sat
+var g_bOverwriteTiles = false;      //if true, tiles will be downloaded without check if exist (yep, something stupid happens...)
 
 
 var strChatHeadEntry = `<tr id="msgid_{CHATID}" class="divChatHeadContainerEntry" onclick="javascript: toggleMessageView(true); loadChatMsgs({CHATID}, true); $('#tbShoutOut').hide(); $('#tbChatMsgs').show();">
@@ -213,7 +217,13 @@ function initWebEventReader() {
 };
 
 
-
+/**
+ * this function reads the device status and events from the device. Some things
+ * can't be done within the webserver context, the API stores the data and sends
+ * and event when finished (sending messages)...
+ * 
+ * @returns {undefined}
+ */
 function readWebEvents() {
     $.ajax({
         url: g_strServer + 'api/api.json',
@@ -243,6 +253,13 @@ function readWebEvents() {
                 else {
                     $("#imgConnState").attr("src", "disconnected.png");
                 };
+            };
+            
+            if(msg["bWiFiConnected"] === true) {
+                g_bOnlineTiles = true;
+            }
+            else {
+                g_bOnlineTiles = false;
             };
             
             //gps stuff:
@@ -465,6 +482,29 @@ function readWebEvents() {
                                 break;
                             };
                         };
+                        
+                        //check if emergency signal
+                        if(gps.Type !== 0) {
+                            var oNode      = getNodeByID(gps.Sender);
+                            var strDevName = "Unknown";
+                            
+                            $('#hfEmergSenderID').val(gps.Sender);
+                            
+                            if(oNode !== null) {
+                                strDevName = oNode.DevName;
+                            };
+                            
+                            if(g_bEmergencyConf === false) {
+                                $("#spanWarningMsg").html("<b>Device: " + gps.Sender + " (" + strDevName + ")</b><br/>Sends emergecy beacon!<br/>");
+                                $("#dlgWarningEmergInfo").modal("show");
+                            }
+                            else {
+                                if(g_lLastEmergeID !== gps.Sender) {
+                                    $("#spanWarningMsg").html("<b>Device: " + gps.Sender + " (" + strDevName + ")</b><br/>Sends emergecy beacon!<br/>");
+                                    $("#dlgWarningEmergInfo").modal("show");
+                                };
+                            };
+                        };
                     };
                 };
                 break;
@@ -489,6 +529,37 @@ function readWebEvents() {
 };
 
 
+/**
+ * if a location is received by a node, with emergency type, the web-app shows a 
+ * a popup, which can be confirmed here (this avoids opening the popup again). When 
+ * the sending device id changes, the popup will be shown again...
+ * 
+ * @param {type} deviceID
+ * @returns {undefined}
+ */
+function confirmEmergency(deviceID) {
+    g_bEmergencyConf = true;
+    g_lLastEmergeID  = deviceID;
+};
+
+
+/**
+ * does the same as confirm, until I have some other idea...
+ * 
+ * @param {type} deviceID
+ * @returns {undefined}
+ */
+function ignoreEmergency(deviceID) {
+    g_bEmergencyConf = true;
+    g_lLastEmergeID  = deviceID;
+}
+
+
+/**
+ * this function returns the query string as array...
+ * 
+ * @returns {unresolved}
+ */
 function getRequests() {
     var s1 = location.search.substring(1, location.search.length).split('&'),
         r = {}, s2, i;
@@ -500,6 +571,7 @@ function getRequests() {
 };
 
 
+
 function resizeWindow() {
   
     $("#divMain").height($(window).height() - ($("#navMainMenu").height() + 17));
@@ -509,7 +581,16 @@ function resizeWindow() {
 };
 
 
-function showMapView() {
+
+/**
+ * this function shows the selected map (map or satellite view). When the device 
+ * is conneted to the internet, it uses the online source and enables tile downloading.
+ * when the device is offline, it uses the existing tiles from the device...
+ * 
+ * @param {type} strMapType can be map or sat
+ * @returns {undefined}
+ */
+function showMapView(strMapType) {
     
     toggleMessageView(true);
     
@@ -519,121 +600,117 @@ function showMapView() {
     $("#divMapContainer").html("<div id=\"map\"></div>");
     $("#divMapContainer").show();
     
-    //ask dev if it is connected to a wifi network
-    //if true, assume, that the user connects via the 
-    //external wifi connection, so that the client can 
-    //access the web, if he connects via the dev ap, this 
-    //won't work...
-    $.ajax({
-        url: g_strServer + 'api/api.json',
-        type: 'POST',
-        crossDomain: true,
-        data: '{"command": "GetWiFi"' +
-              '}',
-        contentType: 'application/json; charset=utf-8',
-        dataType: 'json',
-        async: true,
-        success: function(msg) {
-            console.log(JSON.stringify(msg));
-            
-            if(msg["response"] === "OK") {
-                if((msg["szDevIP"] !== "Not Connected") && (msg["szDevIP"].length > 0)) {
-                    
-                    console.log("Show online data");
-                    g_bOnlineTiles = true;
-                    
-                    if(g_bGpsValid === true) {
-                        // Create the map
-                        g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
-                    }
-                    else {
-                        // Create the map
-                        g_pMap = L.map('map').setView([51, 6], 4);
-                    };
+    //clear downloader & check, 
+    //when the map type changes
+    g_aTileCheck = [];
+    g_aTileDownloader = [];
+    g_pMap = null;
+    
+    g_strMapView = strMapType;
+    
 
-                    // Set up the OSM layer
-                    L.tileLayer(
-                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                    ).addTo(g_pMap);
-                }
-                else {
-                    console.log("Show offline data");
-                    g_bOnlineTiles = false;
-                    
-                    if(g_bGpsValid === true) {
-                        // Create the map
-                        g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
-                    }
-                    else {
-                        // Create the map
-                        g_pMap = L.map('map').setView([51, 6], 4);
-                    };
-                    
-                    // Set up the OSM layer
-                    L.tileLayer(
-                    '/tiles/{z}/{x}/{y}.png'
-                    ).addTo(g_pMap);
-                };
-                
-                
-                //create back btn
-                var btnMapBack = L.control({position: 'topright'});
+    if(g_bOnlineTiles === true) {
 
-                btnMapBack.onAdd = function (g_pMap) {
+        console.log("Show online data");
+        g_bOnlineTiles = true;
 
-                    var div = L.DomUtil.create('div', '');
-                    
-                    div.innerHTML += "<a onclick='javascript: closeMapView();'><img src='/back.png' width='40' height='40'></a>";
-                    
-                    return div;
-                };
-                
-                btnMapBack.addTo(g_pMap);
-                
-                
-                L.Measure = {
-                    linearMeasurement: "Distance measurement",
-                    areaMeasurement: "Area measurement",
-                    meter: "m",
-                    kilometer: "km",
-                    start: "Start",
-                    squareMeter: "m²",
-                    squareKilometers: "km²",
-                    position: "bottomleft"
-                };
-
-                var measure = L.control.measure({}).addTo(g_pMap);
-
-                
-                
-                //show device labels
-                loadKnownDevices(true, true);
-                
-                
-                //show pois on map
-                if($("#chkShowPOI").prop('checked') === true) {
-                    addPoisOnMap();
-                };
-                
-                //add on click handler which adds the last clicked coordinates to the 
-                //manage poi dialog
-                g_pMap.on('click', function(e){
-                    var coord = e.latlng;
-                    var lat = coord.lat;
-                    var lng = coord.lng;
-                    
-                    console.log("clicked the map at latitude: " + lat + " and longitude: " + lng);
-                    
-                    $("#txtPoiLatitude").val(lat);
-                    $("#txtPoiLongitude").val(lng);
-                });
-            };
-        },
-        error: function (msg) {
-            console.log(JSON.stringify(msg));
+        if(g_bGpsValid === true) {
+            // Create the map
+            g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
         }
+        else {
+            // Create the map
+            g_pMap = L.map('map').setView([51, 6], 4);
+        };
+
+        if(strMapType === "map") {
+            // Set up the OSM layer
+            L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ).addTo(g_pMap);
+        }
+        else {
+            // Set up the sat layer
+            L.tileLayer(
+                'http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains:['mt0','mt1','mt2','mt3']}
+            ).addTo(g_pMap);
+        };
+    }
+    else {
+        console.log("Show offline data");
+        g_bOnlineTiles = false;
+
+        if(g_bGpsValid === true) {
+            // Create the map
+            g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
+        }
+        else {
+            // Create the map
+            g_pMap = L.map('map').setView([51, 6], 4);
+        };
+
+        // Set up the OSM layer
+        L.tileLayer(
+        '/' + (g_strMapView === "map" ? "tiles" : "tiles_sat") + '/{z}/{x}/{y}.png'
+        ).addTo(g_pMap);
+    };
+
+
+    //create back btn
+    var btnMapBack = L.control({position: 'topright'});
+
+    btnMapBack.onAdd = function (g_pMap) {
+
+        var div = L.DomUtil.create('div', '');
+
+        div.innerHTML += "<a onclick='javascript: closeMapView();'><img src='/back.png' width='40' height='40'></a>";
+
+        return div;
+    };
+
+    btnMapBack.addTo(g_pMap);
+
+
+    L.Measure = {
+        linearMeasurement: "Distance measurement",
+        areaMeasurement: "Area measurement",
+        meter: "m",
+        kilometer: "km",
+        start: "Start",
+        squareMeter: "m²",
+        squareKilometers: "km²",
+        position: "bottomleft"
+    };
+
+    var measure = L.control.measure({}).addTo(g_pMap);
+
+
+
+    //show device labels
+    loadKnownDevices(true, true);
+
+
+    //show pois on map
+    if($("#chkShowPOI").prop('checked') === true) {
+        addPoisOnMap();
+    };
+
+    //add on click handler which adds the last clicked coordinates to the 
+    //manage poi dialog
+    g_pMap.on('click', function(e){
+        var coord = e.latlng;
+        var lat = coord.lat;
+        var lng = coord.lng;
+
+        console.log("clicked the map at latitude: " + lat + " and longitude: " + lng);
+
+        $("#txtPoiLatitude").val(lat);
+        $("#txtPoiLongitude").val(lng);
     });
 };
+
 
 
 
@@ -866,51 +943,84 @@ async function tileCheck() {
     //variables
     ///////////
     var strFile = "";
+    var strX = "";
+    var strY = "";
+    var strZ = "";
+    
 
     if(g_aTileCheck.length > 0) {
         
-        console.log("tileCheck: check tile: " + g_aTileCheck[0]);
-        
-        //get the image path 
-        //since the source is openstreetmap, search for .org
-        strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
+        if(g_bOverwriteTiles === false) {
+            console.log("tileCheck: check tile: " + g_aTileCheck[0]);
 
-        console.log("file: " + strFile);
+            if(g_strMapView === "map") {
+                //OSM returns an URL 
+                //get the image path 
+                //since the source is openstreetmap, search for .org
+                strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
 
-        //check if tile exist on the device
-        $.ajax({
-            url: g_strServer + 'api/api.json',
-            type: 'POST',
-            data: '{"command": "fileExist", ' +
-                  ' "file": "' + "/tiles" + strFile + '"' +
-                  '}',
-            contentType: 'application/json; charset=utf-8',
-            crossDomain: true,
-            dataType: 'json',
-            async: false,
-            headers: {
-                "accept": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
-                "Access-Control-Allow-Methods": "GET, POST"
-            },
-            success: async function(msg) {
-                
-                console.log(JSON.stringify(msg));
-                
-                if(msg["response"] === "ERR") {
-                    if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
-                        g_aTileDownloader.push(g_aTileCheck[0]);
-                    };        
-                };
-            },
-            error: function (msg) {
-
-                console.log(JSON.stringify(msg));
+                //try to create the path, don't care if it exist...
+                strFile = "/tiles" + strFile;
             }
-        });
+            else {
+                //get the image path 
+                //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
+                strX = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("x=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("x=")));
+                strY = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("y=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("y=")));
+                strZ = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("z=") + 2);
+
+                //try to create the path (z, x, y), don't care if it exist...
+                strFile = "/tiles_sat/" + strZ + "/" + strX + "/" + strY + ".png";
+            };
+
+            console.log("file: " + strFile);
+
+            //check if tile exist on the device
+            $.ajax({
+                url: g_strServer + 'api/api.json',
+                type: 'POST',
+                data: '{"command": "fileExist", ' +
+                      ' "file": "' + strFile + '"' +
+                      '}',
+                contentType: 'application/json; charset=utf-8',
+                crossDomain: true,
+                dataType: 'json',
+                async: false,
+                headers: {
+                    "accept": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                    "Access-Control-Allow-Methods": "GET, POST"
+                },
+                success: async function(msg) {
+
+                    console.log(JSON.stringify(msg));
+
+                    if(msg["response"] === "ERR") {
+                        if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
+                            g_aTileDownloader.push(g_aTileCheck[0]);
+                        };        
+                    };
+                },
+                error: function (msg) {
+
+                    console.log(JSON.stringify(msg));
+                }
+            });
+            
+            g_aTileCheck.splice(0, 1);
+        }
+        else {
+            while(g_aTileCheck.length > 0) {
+                if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
+                    g_aTileDownloader.push(g_aTileCheck[0]);
+                }; 
+                
+                g_aTileCheck.splice(0, 1);
+            };  
+        };
         
-        g_aTileCheck.splice(0, 1);
+        
         
         //update progress bar
         $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
@@ -938,19 +1048,32 @@ async function tileDownloader() {
     var nIdx = 0;
     var bErr = false;
     
-    
     if(g_bTileDownload === false) {
         if(g_aTileDownloader.length > 0) {
             console.log("tileDownloader: download tile: " + g_aTileDownloader[0]);
             
             g_bTileDownload = true;
             
-            //get the image path 
-            //since the source is openstreetmap, search for .org
-            strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
+            if(g_strMapView === "map") {
+                //OSM returns an URL 
+                //get the image path 
+                //since the source is openstreetmap, search for .org
+                strFile = g_aTileDownloader[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
 
-            //try to create the path, don't care if it exist...
-            strFile = "/tiles" + strFile;
+                //try to create the path, don't care if it exist...
+                strFile = "/tiles" + strFile;
+            }
+            else {
+                //get the image path 
+                //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
+                strX = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf("x=") + 2, g_aTileDownloader[0].indexOf("&", g_aTileDownloader[0].indexOf("x=")));
+                strY = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf("y=") + 2, g_aTileDownloader[0].indexOf("&", g_aTileDownloader[0].indexOf("y=")));
+                strZ = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf("z=") + 2);
+
+                //try to create the path (z, x, y), don't care if it exist...
+                strFile = "/tiles_sat/" + strZ + "/" + strX + "/" + strY + ".png";
+            };
+   
 
             while((nIdx < strFile.length) && (bErr === false)) {
                 strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
@@ -960,7 +1083,7 @@ async function tileDownloader() {
                     break;
                 };
 
-                if(strPath !== "/tiles") {
+                if((strPath !== "/tiles") || (strPath !== "/tiles_sat")) {
 
                     strFolder = strPath;
                     console.log("Create dir: " + strPath);
@@ -1198,7 +1321,15 @@ function chatHeadComparer( a, b ) {
 }
 
 
-
+/**
+ * simple XOR encryption (for end to end encryption). I assume, that encrypt 
+ * will take long enough to make the information useless. The user should 
+ * change the key often, to increase protection...
+ * 
+ * @param {type} input
+ * @param {type} key
+ * @returns {String}
+ */
 function encryptString(input, key) {
     var c = '';
     while (key.length < input.length) {

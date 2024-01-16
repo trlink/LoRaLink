@@ -27,7 +27,7 @@
 
 //defines
 /////////
-#define WEBAPIDEBUG
+//#define WEBAPIDEBUG
 //#define WEBAPIDEBUGX
 //#define TCPAPIDEBUG
 //#define TCPAPIERROR
@@ -1125,13 +1125,11 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
     if(strcmp_P(doc[F("command")], PSTR("GetWiFi")) == 0)
     {
-      //variables
-      ///////////
-      JsonObject            root        = docResp.to<JsonObject>();
-      JsonArray             networks    = root.createNestedArray("networks");
-    
       if((int)doc[F("scanWiFi")] == 1)
       {
+        JsonObject            root        = docResp.to<JsonObject>();
+        JsonArray             networks    = root.createNestedArray("networks");
+      
         Serial.println(F("Scan for networks:"));
   
         //scan for networks
@@ -1376,12 +1374,13 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
       nEventID = g_pWebEvent->getEvent(dwUserID, (uint32_t*)&dwDataID, szData);
 
-      sprintf_P(szResp, PSTR("{\"nEventID\": %i, \"dwDataID\": %u, \"bConnected\": %s, \"szData\": \"%s\", \"response\": \"OK\", \"lUptimeSec\": %u"), 
+      sprintf_P(szResp, PSTR("{\"nEventID\": %i, \"dwDataID\": %u, \"bConnected\": %s, \"szData\": \"%s\", \"response\": \"OK\", \"lUptimeSec\": %u, \"bWiFiConnected\": %s"), 
         nEventID, 
         dwDataID, 
         (LLSystemState.bConnected == true ? "true" : "false"), 
         szData, 
-        millis() / 1000
+        millis() / 1000,
+        (g_bWiFiConnected == true ? "true" : "false")
       );
 
       #if LORALINK_HARDWARE_GPS == 1

@@ -26,9 +26,9 @@ using namespace httpsserver;
 
 //defines
 /////////
-#define WEBSERVERDEBUG
+//#define WEBSERVERDEBUG
 //#define WEBSERVERDEBUGX
-#define MAX_FILE_RESP_BUFF_SIZE       2048
+#define MAX_FILE_RESP_BUFF_SIZE       512
 #define MAX_WEBSERVER_CONNECTIONS     5
 
 typedef void(*WebServerOnPostRequest)(void *req, void *res, char *pData, int nDataLength);

@@ -3,7 +3,7 @@
 
   //general config
   ////////////////
-  #define LORALINK_VERSION_STRING               "v2.2"
+  #define LORALINK_VERSION_STRING               "v2.3"
   #define LORALINK_MAX_MESSAGE_SIZE             1500
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
@@ -13,7 +13,7 @@
   #define LORALINK_HARDWARE_GPS                 1       //Device has GPS
   #define LORALINK_HARDWARE_WIFI                1       //device has WiFi
   #define LORALINK_HARDWARE_OLED                1       //device has a display
-  #define LORALINK_STACKSIZE_WEBSERVER          18000  
+  #define LORALINK_STACKSIZE_WEBSERVER          20000  
   #define LORALINK_STACKSIZE_MODEM              8000
   #define LORALINK_STACKSIZE_MODEM_DATA         6000
   #define LORALINK_STACKSIZE_BLINK              1000

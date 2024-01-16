@@ -123,9 +123,6 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     // The mime type (It is determined by the client. So do not trust this value and blindly start
     //   parsing files only if the type matches)
     name = parser->getFieldName();
-
-    Serial.print(F("FieldName: "));
-    Serial.println(name.c_str());
     
     // Double check that it is what we expect
     if(name == "file") 
@@ -159,7 +156,7 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     
             if(readLength > 0)
             {
-              #ifdef WEBSERVERDEBUG
+              #ifdef WEBSERVERDEBUGX
                 // We log all three values, so that you can observe the upload on the serial monitor:
                 Serial.printf("handleFormUpload: filename='%s', write %i bytes\n", filename.c_str(), readLength);
               #endif
@@ -227,14 +224,15 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
 
   if(strFile.length() > 0)
   {
-    res->setHeader("Content-Type", getContentType((char*)strFile.c_str()).c_str());
-
     if(LORALINK_WEBAPP_FS.exists((char*)strFile.c_str()) == true)
     {
       file = LORALINK_WEBAPP_FS.open((char*)strFile.c_str(), "r");
   
       if(file)
       {
+        res->setHeader("Content-Type", getContentType((char*)strFile.c_str()).c_str());
+        res->setStatusCode(200);
+        
         do
         {
           memset(pData, 0, MAX_FILE_RESP_BUFF_SIZE);
@@ -257,6 +255,8 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
       }
       else
       {
+        file.close();
+        
         handle404(req, res);
       };
     }
@@ -269,7 +269,6 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
   {
     handle404(req, res);
   };
-
 
   delete pData;
 };
@@ -367,15 +366,27 @@ void handleAPI(HTTPRequest * req, HTTPResponse * res)
   
   while((req->requestComplete() == false) && (lTimeout > millis()) && (idx < nLen))
   {
-    idx += req->readChars(szContent + idx, nLen - idx);
-    
-    delay(100);
+    if(idx < nLen)
+    {
+      idx += req->readChars(szContent + idx, nLen - idx);
+      
+      delay(100);
+    }
+    else 
+    {
+      break;  
+    };
     
     ResetWatchDog();
   };
 
   if(req->requestComplete() == true)
   {
+    #ifdef WEBSERVERDEBUG 
+      Serial.print(F("handleAPI: call cb handler: "));
+      Serial.println(szContent);
+    #endif
+    
     g_apiCallbackHandler(req, res, szContent, nLen);
   }
   else
