@@ -7,13 +7,6 @@
 #include <FS.h>
 
 
-#if LORALINK_HARDWARE_BATSENSE == 1
-
-  void adc_init();
-  float battery_read();
-
-#endif
-
 
 bool CheckIfDeviceExist(int nDevAddr);
 

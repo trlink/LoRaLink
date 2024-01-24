@@ -231,6 +231,13 @@ void CSkyNetConnection::enqueueMsgForType(uint32_t dwDestinationNodeID, uint32_t
     {
       if((pTask->getConnectionType() == nConnType) && (pTask->getTaskID() != nExcludeTaskID))
       {
+        #ifdef SYNET_CONN_DEBUG
+          Serial.print(F("[CSNConn] enqueueMsgForType: type: "));
+          Serial.print(nConnType);
+          Serial.print(F(" exclude: "));
+          Serial.print(nExcludeTaskID);
+        #endif
+        
         this->enqueueMsg(dwDestinationNodeID, dwMsgID, pTask->getTaskID(), pTask->getConnectionType(), pMsg, nMsgLen, bNeedConf);
       };
     };
@@ -272,7 +279,7 @@ CSkyNetConnectionHandler* CSkyNetConnection::getHandlerByTaskID(int nTaskID)
   };
 
 
-  #ifdef SYNET_CONN_DEBUG
+  #ifdef SYNET_CONN_ERROR
     Serial.print(F("[CSNConn] getHandlerByTaskID: Not found: "));
     Serial.println(nTaskID);
   #endif
@@ -381,7 +388,7 @@ void CSkyNetConnection::handleQueuedMessages()
                     }
                     else
                     {
-                      #ifdef SYNET_CONN_INFO
+                      #ifdef SYNET_CONN_ERROR
                         Serial.print(F("[CSNConn] Error / Timeout send data via TaskID: "));
                         Serial.println(pTransmission->nTaskID);
                       #endif
@@ -412,7 +419,7 @@ void CSkyNetConnection::handleQueuedMessages()
                 }
                 else
                 {
-                  #ifdef SYNET_CONN_INFO
+                  #ifdef SYNET_CONN_ERROR
                     Serial.print(F("[CSNConn] Error send data via TaskID: "));
                     Serial.println(pTransmission->nTaskID);
                   #endif
@@ -420,7 +427,7 @@ void CSkyNetConnection::handleQueuedMessages()
               }
               else
               {
-                #ifdef SYNET_CONN_INFO
+                #ifdef SYNET_CONN_DEBUG
                   Serial.println(F("[CSNConn] Modem can't Transmit"));
                 #endif
               };
@@ -447,7 +454,7 @@ void CSkyNetConnection::handleQueuedMessages()
           {
             if(pTransmission->nTries < SKYNET_PROTO_RETRIES)
             {
-              #ifdef SYNET_CONN_DEBUG
+              #ifdef SYNET_CONN_ERROR
                 Serial.print(F("[CSNConn] Error/Timeout sending data via TaskID: "));
                 Serial.print(pTransmission->nTaskID);
                 Serial.println(F(" - resend"));
@@ -457,7 +464,7 @@ void CSkyNetConnection::handleQueuedMessages()
             }
             else
             {
-              #ifdef SYNET_CONN_DEBUG
+              #ifdef SYNET_CONN_ERROR
                 Serial.print(F("[CSNConn] Error/Timeout sending data via TaskID: "));
                 Serial.print(pTransmission->nTaskID);
                 Serial.println(F(" - remove"));

@@ -14,8 +14,8 @@
 #define SKYNET_PROTO_MAX_PACKET_LEN     250
 #define SKYNET_PROTO_MAX_DATA_LEN       (SKYNET_PROTO_MAX_PACKET_LEN - SKYNET_PROTO_MAX_PACKET_LEN)
 #define SKYNET_HEADER_SIZE              (2 + (7 * sizeof(uint32_t)))
-//Max Protocol Data Len 220
-//Max User Data         211
+
+
 
 //response codes
 #define SKYNET_RESPONSE_OK              0

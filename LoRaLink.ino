@@ -18,7 +18,7 @@
 #include "CWebEvent.h"
 #include "CWSFLinkedList.h"
 #include "CSkyNetRouting.h"
-#include <Bounce2.h>
+
 
 
 //https://randomnerdtutorials.com/esp32-send-email-smtp-server-arduino-ide/
@@ -79,8 +79,11 @@ CSkyNetConnection      *g_pSkyNetConnection     = new CSkyNetConnection(g_pDbTas
 CLoRaLinkProtocol      *g_pCLoRaProtocol        = new CLoRaLinkProtocol(g_pSkyNetConnection, g_pDbTaskScheduler);
 char                    g_szFileSystem[10];
 CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
-Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
 
+
+#if LORALINK_HARDWARE_INA219 == 1
+  Adafruit_INA219       *g_pIna219;
+#endif
 
 #ifdef LORALINK_HARDWARE_TBEAM
   AXP20X_Class         *g_pAxp                  = new AXP20X_Class(); 
@@ -103,11 +106,18 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   //function predecl
   //////////////////
   void GpsDataTask(void *pParam);
+  void DisablePositionTransmission();
+  void EnablePositionTransmission(int nType);  
+  void EnableEmergencyTxMenu();
+  void EnablePositionTxMenu();
+  void DisablePositionTxMenu();
 #endif
 
 
 #if LORALINK_HARDWARE_OLED == 1
   Adafruit_SSD1306      g_display;
+  CWSFOneButtonMenu     *g_pOneBtnMnu = NULL;
+
 
   //function predecl
   //////////////////
@@ -151,6 +161,32 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
   void ConnectToLoraLinkServer();
   void HandleLoRaLinkReconnect();
   void EnableWiFi();
+  void DisableWiFi();
+  void EnableWiFiMenu();
+  void DisableWiFiMenu();
+  
+    
+  void EnableWiFiMenu()
+  {
+    EnableWiFi();
+
+    g_pOneBtnMnu->closeMenu();
+  };
+  
+  void DisableWiFiMenu()
+  {
+    DisableWiFi();
+
+    g_pOneBtnMnu->closeMenu();
+  };
+
+
+
+  void DisableWiFi()
+  {
+    LoRaWiFiApCfg.bWiFiEnabled = false;
+    WiFi.mode(WIFI_OFF);
+  };
 
 
   //this function will enable and setup WiFi
@@ -159,8 +195,8 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
     //variables
     ///////////
     IPAddress IP;
-    long      lTimeout;
 
+    
     g_bWiFiConnected = false;
     
     WiFi.mode(WIFI_OFF);
@@ -216,17 +252,6 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       else
       {
         WiFi.begin(LoRaWiFiCfg.szWLANSSID);
-      };
-
-      
-      lTimeout = millis() +  30000;
-
-      //wait till wifi is connected
-      while((g_bWiFiConnected == false) && (millis() < lTimeout));
-      {
-        delay(250);
-        
-        ResetWatchDog();
       };
     };
   };
@@ -531,108 +556,21 @@ Bounce2::Button        *g_pUserButton           = new Bounce2::Button();
       
         if(strcmp_P(doc[F("chatcmd")], PSTR("enablePositionTracking")) == 0)
         {
-          //variables
-          ///////////
-          uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
-          sDBTaskQueryUser  task;  
-          byte              bData[200];
-  
-          if(dwTaskID == 0)
-          {
-            task.dwDeviceID     = 0; //all
-            task.dwUserToInform = 0; //all
-            task.dwContactID    = (int)doc[F("type")];
-            task.dwReleaseTask  = 0;
-            
-            memset(bData, 0, sizeof(bData));
-            memcpy(&bData, (void*)&task, sizeof(sDBTaskQueryUser));
-  
-            g_pDbTaskScheduler->addSchedule(DBTASK_SEND_POSITION, LORALINK_POSITION_INTERVAL_SECONDS, 0, (byte*)&bData, true);
-  
-            g_bLocationTrackingActive = true;
-            g_nLocationTrackingType   = task.dwContactID; //used as type
-          }
-          else
-          {
-            task.dwDeviceID     = 0; //to all devices
-            task.dwUserToInform = 0; //to all user
-            task.dwContactID    = (int)doc[F("type")];
-            task.dwReleaseTask  = 0;
-  
-            memset(bData, 0, sizeof(bData));
-            memcpy(&bData, (void*)&task, sizeof(sDBTaskQueryUser));
-  
-            g_pDbTaskScheduler->updateTaskData(dwTaskID, (byte*)&bData, sizeof(sDBTaskQueryUser));
-  
-            g_bLocationTrackingActive = true;
-            g_nLocationTrackingType   = task.dwContactID; //used as type
-          };
-  
+          EnablePositionTransmission((int)doc[F("type")]);
+          
           docResp["response"] = String(F("OK"));
           nRespCode = 200;
         };
   
         if(strcmp_P(doc[F("chatcmd")], PSTR("disablePositionTracking")) == 0)
         {
-          //variables
-          ///////////
-          uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
-  
-          if(dwTaskID != 0)
-          {
-            g_pDbTaskScheduler->removeSchedule(dwTaskID, true);
-          };
-  
+          DisablePositionTransmission();
+            
           docResp["response"] = String(F("OK"));
           nRespCode = 200;
         };
   
         
-        if(strcmp_P(doc[F("chatcmd")], PSTR("allowPositionTracking")) == 0)
-        {
-          //variables
-          ///////////
-          char                szDatabaseFile[50];
-          CWSFFileDB          *pDatabase;
-          CWSFFileDBRecordset *pRecordset;
-          int                 nBlocked = 0;
-  
-          memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
-          sprintf((char*)&szDatabaseFile, CONTACTSTABLE_FILE, (uint32_t)doc[F("userID")]);
-    
-          pDatabase            = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nContactsTableDef, CONTACTSTABLE_SIZE, false, DBRESERVE_CONTACT_COUNT);
-          pDatabase->open();
-  
-          if(pDatabase->isOpen() == true)
-          {
-            pRecordset = new CWSFFileDBRecordset(pDatabase, (uint32_t)doc[F("contactID")]);
-  
-            if(pRecordset->haveValidEntry() == true)
-            {
-              nBlocked = (int)doc[F("allowed")];
-  
-              pRecordset->setData(6, (void*)&nBlocked, sizeof(nBlocked));
-  
-              docResp["response"] = String(F("OK"));
-              nRespCode = 200;
-            }
-            else
-            {
-              docResp["response"] = String(F("ERR"));
-              nRespCode = 500;
-            };
-  
-            delete pRecordset;
-          }
-          else
-          {
-            docResp["response"] = String(F("ERR"));
-            nRespCode = 500;
-          };
-  
-          delete pDatabase;
-        };
-
         if(strcmp_P(doc[F("chatcmd")], PSTR("startTrackRecord")) == 0)
         {
           //variables
@@ -3327,10 +3265,7 @@ void setup()
   Serial.print(F("Init LoRa-Link on "));
   Serial.println(LORALINK_HARDWARE_NAME);
 
-
-  g_pUserButton->attach(USER_BUTTON, INPUT);
-  g_pUserButton->setPressedState(LOW); 
-  
+  pinMode(USER_BUTTON, INPUT);
 
   g_lReconnectToServerTimeout = 0;
   g_bReconnectToServer        = false;
@@ -3375,6 +3310,10 @@ void setup()
       Serial.println(F("SSD1306 failed"));
     };
 
+    #if LORALINK_HARDWARE_OLED_ROTATION != 0
+      g_display.setRotation(LORALINK_HARDWARE_OLED_ROTATION);
+    #endif
+
     g_display.display();
     delay(1000);
 
@@ -3388,7 +3327,60 @@ void setup()
     g_display.print(LORALINK_VERSION_STRING);
     g_display.print(F(" Init:\n"));
     g_display.display();
+
+    sMenuItem *pMenu = NULL;
+
+
+    #if LORALINK_HARDWARE_GPS == 1
+      //create one button menu
+      sMenuItem *pItem1 = new sMenuItem;
+      sMenuItem *pItem2 = new sMenuItem;
+      sMenuItem *pItem3 = new sMenuItem;
+
+      pItem1->pNext = pItem2;
+      pItem2->pNext = pItem3;
+      pItem3->pNext = NULL;
+      
+      pItem1->strMenuText   = "EMERGENCY TX";
+      pItem1->pSubMenu      = NULL;
+      pItem1->menuCallBack  = EnableEmergencyTxMenu;
+      pItem2->strMenuText   = "POSITION TX";
+      pItem2->pSubMenu      = NULL;
+      pItem2->menuCallBack  = EnablePositionTxMenu;  
+      pItem3->strMenuText   = "POSITION TX OFF";
+      pItem3->pSubMenu      = NULL;
+      pItem3->menuCallBack  = DisablePositionTxMenu;  
+      pMenu = pItem1;
+    #endif
+    
+    
+    
+    #if LORALINK_HARDWARE_WIFI == 1
+      sMenuItem *pItem4 = new sMenuItem;
+      sMenuItem *pItem5 = new sMenuItem;
+
+      #if LORALINK_HARDWARE_GPS == 1
+        pItem3->pNext = pItem4;
+      #else
+        pMenu = pItem4;
+      #endif
+      
+      pItem4->pNext = pItem5;
+      pItem5->pNext = NULL;
+
+      pItem4->strMenuText   = "WiFi Off";
+      pItem4->pSubMenu      = NULL;
+      pItem4->menuCallBack  = DisableWiFiMenu;
+      pItem5->strMenuText   = "WiFi On";
+      pItem5->pSubMenu      = NULL;
+      pItem5->menuCallBack  = EnableWiFiMenu;
+    #endif  
+
+    g_pOneBtnMnu          = new CWSFOneButtonMenu(&g_display, pMenu);
   #endif
+
+  
+
 
 
   #ifdef LORALINK_HARDWARE_TBEAM
@@ -3540,6 +3532,16 @@ void setup()
     };
   #endif
 
+  #if LORALINK_HARDWARE_INA219 == 1
+    Serial.println(F("Init INA219:"));
+
+    g_pIna219 = new Adafruit_INA219(LORALINK_HARDWARE_INA219_ADDR);
+
+    if(g_pIna219->begin(&Wire) == false) 
+    {
+      Serial.println("Failed to find INA219 chip");
+    };
+  #endif
 
   ReadDeviceConfig();
 
@@ -3892,23 +3894,6 @@ void loop()
 
   while(true)
   {
-    g_pUserButton->update();
-
-    if(g_pUserButton->pressed() == true)
-    {
-      #if LORALINK_HARDWARE_WIFI == 1
-        if(LoRaWiFiApCfg.bWiFiEnabled == true)
-        {
-          LoRaWiFiApCfg.bWiFiEnabled = false;
-          WiFi.mode(WIFI_OFF);
-        }
-        else
-        {
-          EnableWiFi();
-        };
-      #endif
-    };
-
     #if LORALINK_HARDWARE_WIFI == 1
       //turn wifi off, 5min after startup, when the 
       //device is a repeater without login
@@ -4299,7 +4284,12 @@ void ModemDataTask(void *pParam)
     int  nMaxCard                 = 4;
     long lInfoCardSwitchTimer     = millis() + INFO_CARD_SWITCH_INTERVAL;
     float fSystemVoltage          = 0.0;
-
+    float fSystemConsumption      = 0.0;
+    bool  bBtnPressed             = false;
+    long  lPressTime              = 0;
+    long  lReleaseTime            = 0;
+    bool  bChangeCard             = false;
+    
     #if LORALINK_HARDWARE_GPS == 1
       nMaxCard += 1;
     #endif
@@ -4313,173 +4303,232 @@ void ModemDataTask(void *pParam)
     
     while(true)
     {
-      LLSystemState.lMemFreeDisplayTask = uxTaskGetStackHighWaterMark(NULL);
-
-      //does the cards need to be switched?
-      if(millis() > lInfoCardSwitchTimer)
+      if(digitalRead(USER_BUTTON) == LOW)
       {
-        lInfoCardSwitchTimer   = millis() + INFO_CARD_SWITCH_INTERVAL;
-        nInfoCard             += 1;
-        //mem page: nInfoCard             = 1;
-        
-        if(nInfoCard >= nMaxCard)
-        {
-          nInfoCard = 0;
-        };
-      };
-
-      //does the card need to be updated?
-      if(lTimer < millis())
+        bBtnPressed       = true;
+        lReleaseTime      = millis();
+      }
+      else
       {
-        //2 updates / sec
-        lTimer = millis() + 500;
-        
-        g_display.clearDisplay();
-        nIpConns = g_pSkyNetConnection->countConnHandlerByType(SKYNET_CONN_TYPE_IP_CLIENT) + g_pSkyNetConnection->countConnHandlerByType(SKYNET_CONN_TYPE_IP_SERVER);
-    
-        w = 110; h = 0;
-        g_display.setCursor(w, h);     // Start at top-left corner
-        
-        switch(g_pModemTask->GetModemState())
+        if(bBtnPressed == true)
         {
-          case MODEM_STATE_TX: { g_display.print("TX"); }; break;
-          case MODEM_STATE_RX: { g_display.print("RX"); }; break;
-          case MODEM_STATE_WAIT_RX: { g_display.print("WR"); }; break;
-          case MODEM_STATE_ERROR: { g_display.print("ER"); }; break;
-          case MODEM_STATE_IDLE: { g_display.print("--"); }; break;
-          case MODEM_STATE_WAIT_TX: { g_display.print("WT"); }; break;
-        };
-    
-    
-        w = 1; h = 0;
-        g_display.setCursor(w, h);     // Start at top-left corner
-  
-        if(ModemConfig.bDisableLoRaModem == false)
-        {
-          sprintf_P(szText, PSTR("%.3fkHz IP: %i\0"), (float)ModemConfig.lFrequency / 1000000.0, nIpConns); 
-        }
-        else
-        {
-          strcpy_P(szText, PSTR("Radio Off\0"));
-        };
-        
-        g_display.print(szText);
-    
-        w = 0; h = 9;
-        g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
-        //end of top info
-  
-        switch(nInfoCard)
-        {
-          //display DevName & Node ID
-          case 0:
+          //debounce
+          if((millis() -  lReleaseTime) > 25)
           {
-            //center screen height
-            h = ((64 - (9 + 12)) / 2);
-            
-      
-            sprintf_P(szText, PSTR("%u\0"), DeviceConfig.dwDeviceID);
-            
-            //center screen width according to text size
-            w = (128 - (strlen(szText) * 5)) / 2;
-            
-            g_display.setCursor(w, h);
-            g_display.print(szText);
-      
-      
-            sprintf_P(szText, PSTR("%s\0"), DeviceConfig.szDevName);
-            
-            w = (128 - (strlen(szText) * 5)) / 2;
-            h += 10;
-            g_display.setCursor(w, h);
-            g_display.print(szText);
-          };
-          break;
-  
-          //memory info
-          case 1:
-          {  
-            sprintf_P(szText, PSTR("Free Mem:  %u\nFree Mdm:  %u\nFree Dsp:  %u\nFree Web:  %u\nFree Data: %u\0"), LLSystemState.lMemFreeOverall, LLSystemState.lMemFreeModemTask, LLSystemState.lMemFreeDisplayTask, LLSystemState.lMemFreeWebServerTask, LLSystemState.lMemFreeModemDataTask);
-  
-            w = 0; h = 12;
-            g_display.setCursor(w, h);
-            
-            g_display.print(szText);
-          };
-          break;
-  
-          //misc
-          case 2:
-          {
-            #ifdef LORALINK_HARDWARE_TBEAM
-              fSystemVoltage = g_pAxp->getBattVoltage() / 1000.0;
-            #else
-              #if LORALINK_HARDWARE_BATSENSE == 1
-                fSystemVoltage = battery_read();
-              #else
-                fSystemVoltage = 0.0;
-              #endif
-            #endif
-            
-            sprintf_P(szText, PSTR("Battery: %.2fv\nNetwork: %s\nFlash: %llukB\nSD: %lluMB\nTran. Blk: %i\0"), fSystemVoltage, (LLSystemState.bConnected == true ? "Connected" : "Unavailable"), (LLSystemState.lIntSpiBytesAvail - LLSystemState.lIntSpiBytesUsed) / 1024, (LLSystemState.lExtSpiBytesAvail - LLSystemState.lExtSpiBytesUsed) / (1024 * 1024), LLSystemState.lBlocksToTransfer);
-       
-            w = 0; h = 13;
-            g_display.setCursor(w, h);
-            
-            g_display.print(szText);
-          };
-          break;
-  
-  
-          //LoRa Msgs
-          case 3:
-          {
-            if(LoRaWiFiApCfg.bWiFiEnabled == true)
+            bBtnPressed       = false;
+
+            //check if short or long press
+            if((millis() - lPressTime) < 500)
             {
-              sprintf_P(szText, PSTR("Proto MSGS: %i\nAP IP: %s\nIP: %s\0"), LLSystemState.lOutstandingMsgs, LoRaWiFiApCfg.szDevIP, LoRaWiFiCfg.szDevIP);
+              if(g_pOneBtnMnu->isOpen() == true)
+              {
+                g_pOneBtnMnu->shortPress();
+              }
+              else
+              {
+                bChangeCard = true;
+              };
             }
             else
             {
-              sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: OFF\0"), LLSystemState.lOutstandingMsgs);
+              if(g_pOneBtnMnu->isOpen() == true)
+              {
+                g_pOneBtnMnu->longPress();
+              }
+              else
+              {
+                g_pOneBtnMnu->openMenu();
+              };
             };
-       
-            w = 0; h = 13;
-            g_display.setCursor(w, h);
-            
-            g_display.print(szText);
           };
-          break;
+        }
+        else
+        {
+          lPressTime = millis();
+        };
+      };
 
-          #if LORALINK_HARDWARE_GPS == 1
+
+      if(g_pOneBtnMnu->isOpen() == false)
+      {
+        g_display.setTextSize(1);      // Normal 1:1 pixel scale
+    
+        LLSystemState.lMemFreeDisplayTask = uxTaskGetStackHighWaterMark(NULL);
+  
+        //does the cards need to be switched?
+        if((millis() > lInfoCardSwitchTimer) || (bChangeCard == true))
+        {
+          lInfoCardSwitchTimer   = millis() + INFO_CARD_SWITCH_INTERVAL;
+          nInfoCard             += 1;
+          //mem page: nInfoCard             = 1;
+
+          if(bChangeCard == true)
+          {
+            bChangeCard = false;
+
+            lInfoCardSwitchTimer   = millis() + 30000;
+          };
           
-            case 4:
+          if(nInfoCard >= nMaxCard)
+          {
+            nInfoCard = 0;
+          };
+        };
+  
+        //does the card need to be updated?
+        if(lTimer < millis())
+        {
+          //2 updates / sec
+          lTimer = millis() + 500;
+          
+          g_display.clearDisplay();
+          nIpConns = g_pSkyNetConnection->countConnHandlerByType(SKYNET_CONN_TYPE_IP_CLIENT) + g_pSkyNetConnection->countConnHandlerByType(SKYNET_CONN_TYPE_IP_SERVER);
+      
+          w = 110; h = 0;
+          g_display.setCursor(w, h);     // Start at top-left corner
+          
+          switch(g_pModemTask->GetModemState())
+          {
+            case MODEM_STATE_TX: { g_display.print("TX"); }; break;
+            case MODEM_STATE_RX: { g_display.print("RX"); }; break;
+            case MODEM_STATE_WAIT_RX: { g_display.print("WR"); }; break;
+            case MODEM_STATE_ERROR: { g_display.print("ER"); }; break;
+            case MODEM_STATE_IDLE: { g_display.print("--"); }; break;
+            case MODEM_STATE_WAIT_TX: { g_display.print("WT"); }; break;
+          };
+      
+      
+          w = 1; h = 0;
+          g_display.setCursor(w, h);     // Start at top-left corner
+    
+          if(ModemConfig.bDisableLoRaModem == false)
+          {
+            sprintf_P(szText, PSTR("%.3fkHz IP: %i\0"), (float)ModemConfig.lFrequency / 1000000.0, nIpConns); 
+          }
+          else
+          {
+            strcpy_P(szText, PSTR("Radio Off\0"));
+          };
+          
+          g_display.print(szText);
+      
+          w = 0; h = 9;
+          g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
+          //end of top info
+    
+          switch(nInfoCard)
+          {
+            //display DevName & Node ID
+            case 0:
             {
-              sprintf_P(szText, PSTR("GPS Time: %s\nLat: %f\nLon: %f\nSat: %i\0"), LLSystemState.szGpsTime, LLSystemState.fLatitude, LLSystemState.fLongitude, LLSystemState.nNumSat);
-       
+              //center screen height
+              h = ((64 - (9 + 12)) / 2);
+              
+        
+              sprintf_P(szText, PSTR("%u\0"), DeviceConfig.dwDeviceID);
+              
+              //center screen width according to text size
+              w = (128 - (strlen(szText) * 5)) / 2;
+              
+              g_display.setCursor(w, h);
+              g_display.print(szText);
+        
+        
+              sprintf_P(szText, PSTR("%s\0"), DeviceConfig.szDevName);
+              
+              w = (128 - (strlen(szText) * 5)) / 2;
+              h += 10;
+              g_display.setCursor(w, h);
+              g_display.print(szText);
+            };
+            break;
+    
+            //memory info
+            case 1:
+            {  
+              sprintf_P(szText, PSTR("Free Mem:  %u\nFree Mdm:  %u\nFree Dsp:  %u\nFree Web:  %u\nFree Data: %u\0"), LLSystemState.lMemFreeOverall, LLSystemState.lMemFreeModemTask, LLSystemState.lMemFreeDisplayTask, LLSystemState.lMemFreeWebServerTask, LLSystemState.lMemFreeModemDataTask);
+    
+              w = 0; h = 12;
+              g_display.setCursor(w, h);
+              
+              g_display.print(szText);
+            };
+            break;
+    
+            //misc
+            case 2:
+            {
+              #ifdef LORALINK_HARDWARE_TBEAM
+                fSystemVoltage = g_pAxp->getBattVoltage() / 1000.0;
+              #else
+                #if LORALINK_HARDWARE_INA219 == 1
+                  fSystemVoltage      = g_pIna219->getBusVoltage_V();
+                  fSystemConsumption  = g_pIna219->getCurrent_mA();
+                #else
+                  fSystemVoltage = 0.0;
+                #endif
+              #endif
+              
+              sprintf_P(szText, PSTR("Bat: %.2fv, %.1fmA\nNetwork: %s\nFlash: %llukB\nSD: %lluMB\nTran. Blk: %i\0"), fSystemVoltage, fSystemConsumption, (LLSystemState.bConnected == true ? "Connected" : "Unavailable"), (LLSystemState.lIntSpiBytesAvail - LLSystemState.lIntSpiBytesUsed) / 1024, (LLSystemState.lExtSpiBytesAvail - LLSystemState.lExtSpiBytesUsed) / (1024 * 1024), LLSystemState.lBlocksToTransfer);
+         
               w = 0; h = 13;
               g_display.setCursor(w, h);
               
               g_display.print(szText);
             };
             break;
-
-          #endif
+    
+    
+            //LoRa Msgs
+            case 3:
+            {
+              if(LoRaWiFiApCfg.bWiFiEnabled == true)
+              {
+                sprintf_P(szText, PSTR("Proto MSGS: %i\nAP IP: %s\nIP: %s\0"), LLSystemState.lOutstandingMsgs, LoRaWiFiApCfg.szDevIP, LoRaWiFiCfg.szDevIP);
+              }
+              else
+              {
+                sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: OFF\0"), LLSystemState.lOutstandingMsgs);
+              };
+         
+              w = 0; h = 13;
+              g_display.setCursor(w, h);
+              
+              g_display.print(szText);
+            };
+            break;
+  
+            #if LORALINK_HARDWARE_GPS == 1
+            
+              case 4:
+              {
+                sprintf_P(szText, PSTR("GPS Time: %s\nLat: %f\nLon: %f\nSat: %i\0"), LLSystemState.szGpsTime, LLSystemState.fLatitude, LLSystemState.fLongitude, LLSystemState.nNumSat);
+         
+                w = 0; h = 13;
+                g_display.setCursor(w, h);
+                
+                g_display.print(szText);
+              };
+              break;
+  
+            #endif
+          };
+    
+          //bottom info
+          w = 0; h = 52;
+          g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
+          
+          w = 6; h = 54;
+          g_display.setCursor(w, h);     // Start at top-left corner
+          g_display.print(ClockPtr->GetTimeString());
+          
+          g_display.display();
         };
-  
-        //bottom info
-        w = 0; h = 52;
-        g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
-        
-        w = 6; h = 54;
-        g_display.setCursor(w, h);     // Start at top-left corner
-        g_display.print(ClockPtr->GetTimeString());
-        
-        g_display.display();
       };
-  
+      
       ResetWatchDog();
   
-      delay(100);
+      delay(10);
     };
   };
 #endif
@@ -5528,4 +5577,73 @@ void OnTaskScheduleRemove(uint32_t dwScheduleID, int nScheduleType, uint32_t dwL
 void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen)
 {
   g_pCLoRaProtocol->handleLoRaLinkProtocolData((_sSkyNetProtocolMessage*)pProtocolMsg, pData, nDataLen);
+};
+
+//callback for menu
+void EnableEmergencyTxMenu()
+{
+  EnablePositionTransmission(GPS_POSITION_TYPE_EMERGENCY);
+
+  g_pOneBtnMnu->closeMenu();
+};
+
+
+void EnablePositionTxMenu()
+{
+  EnablePositionTransmission(GPS_POSITION_TYPE_NORMAL);
+
+  g_pOneBtnMnu->closeMenu();
+};
+
+
+void DisablePositionTxMenu()
+{
+  DisablePositionTransmission();
+
+  g_pOneBtnMnu->closeMenu();
+};
+
+//this function removes the task from the scheduler
+void DisablePositionTransmission()
+{
+  //variables
+  ///////////
+  uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
+
+  if(dwTaskID != 0)
+  {
+    g_pDbTaskScheduler->removeSchedule(dwTaskID, true);
+  };
+};
+
+
+//this function adds or updates a running task to send the GPS
+//position.
+void EnablePositionTransmission(int nType)
+{
+  //variables
+  ///////////
+  uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
+  sDBTaskQueryUser  task;  
+  byte              bData[200];
+
+  task.dwDeviceID     = 0; //all
+  task.dwUserToInform = 0; //all
+  task.dwContactID    = nType;
+  task.dwReleaseTask  = 0;
+
+  memset(bData, 0, sizeof(bData));
+  memcpy(&bData, (void*)&task, sizeof(sDBTaskQueryUser));
+
+  g_bLocationTrackingActive = true;
+  g_nLocationTrackingType   = task.dwContactID; //used as type
+
+  if(dwTaskID == 0)
+  {    
+    g_pDbTaskScheduler->addSchedule(DBTASK_SEND_POSITION, LORALINK_POSITION_INTERVAL_SECONDS, 0, (byte*)&bData, true);
+  }
+  else
+  {
+    g_pDbTaskScheduler->updateTaskData(dwTaskID, (byte*)&bData, sizeof(sDBTaskQueryUser));
+  };
 };

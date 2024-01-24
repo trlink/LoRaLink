@@ -1058,7 +1058,7 @@ async function tileDownloader() {
                 //OSM returns an URL 
                 //get the image path 
                 //since the source is openstreetmap, search for .org
-                strFile = g_aTileDownloader[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
+                strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
 
                 //try to create the path, don't care if it exist...
                 strFile = "/tiles" + strFile;

@@ -89,24 +89,7 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
       };
     };
 
-    //check our state:
-    //if we receive something, but are not connected,
-    //immediately release a HELLO_IND, this will hopefully 
-    //increase the speed of getting connected via LORA...
-    if(this->m_nConnType == SKYNET_CONN_TYPE_LORA)
-    {
-      if(this->m_nState != SKYNET_CONN_STATE_CONNECTED)
-      {
-        #if SKYNET_CONN_INFO == 1
-          Serial.println(F("[CHandler] reconnect via LoRa on Received DATA"));
-        #endif
-        
-        this->m_nState      = SKYNET_CONN_STATE_INIT;
-        this->m_lStateTimer = millis();
-      };
-    };
     
-
     #if SKYNET_CONN_INFO == 1
       Serial.print(F("[CHandler] handle MSG from: "));
       Serial.print(msg.nSenderID);
@@ -725,14 +708,18 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                   if((msg.nReceiverID == 0) && (this->getConnectionType() == SKYNET_CONN_TYPE_LORA))
                   {
                     #if SKYNET_CONN_INFO == 1
-                      Serial.println(F("[CHandler] fwd HELLO_IND from LORA -> IP "));
+                      Serial.println(F("[CHandler] --> fwd HELLO_IND from LORA -> IP "));
                     #endif
                     
-                    nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
+                    nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nSenderID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
   
                     //forward to IP nodes
-                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
-                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nAnswerLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nAnswerLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
+
+                    #if SKYNET_CONN_INFO == 1
+                      Serial.println(F("[CHandler] <-- fwd HELLO_IND from LORA -> IP "));
+                    #endif
                   };
                 #endif
                 
@@ -742,16 +729,16 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                     Serial.println(F("[CHandler] fwd HELLO_IND from IP -> LORA, IP -> other IP"));
                   #endif
                   
-                  nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nOriginID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
+                  nAnswerLen    = HELLO_IND(pAnswer, msg.dwMsgID, msg.nSenderID, 0, msg.nSenderID, DeviceConfig.dwDeviceID, szName, (int)bDevType, fLocN, fLocE, szLocOrientation[0], msg.nHopCount + 1);
 
                   //forward to LORA nodes
                   #if LORALINK_HARDWARE_LORA == 1
-                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_LORA, this->getTaskID());
+                    ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nAnswerLen, false, SKYNET_CONN_TYPE_LORA, this->getTaskID());
                   #endif
 
                   //forward to other IP Nodes
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
-                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nAnswerLen, false, SKYNET_CONN_TYPE_IP_CLIENT, this->getTaskID());
+                  ((CSkyNetConnection*)this->m_pSkyNetConnection)->enqueueMsgForType(0, msg.dwMsgID, pAnswer, nAnswerLen, false, SKYNET_CONN_TYPE_IP_SERVER, this->getTaskID());
                 };
   
                 
@@ -802,16 +789,6 @@ void CSkyNetConnectionHandler::handleConnData(byte *pData, int nDataLength, int 
                       Serial.println(msg.nViaID);
                     #endif
                   };
-                };
-  
-                if((this->m_nState == SKYNET_CONN_STATE_INIT) || (this->m_nState == SKYNET_CONN_STATE_CONNECTING))
-                {
-                  #if SKYNET_CONN_DEBUG == 1
-                    Serial.println(F("[CHandler] IND for dev, my State is still disconnected, send hello_ind"));
-                  #endif
-  
-                  this->m_lStateTimer = millis();
-                  this->m_nState      = SKYNET_CONN_STATE_INIT;
                 };
               };
             };

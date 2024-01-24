@@ -11,6 +11,7 @@
 
 #define SYNET_CONN_INFO
 #define SYNET_CONN_DEBUG
+#define SYNET_CONN_ERROR
 //#define SYNET_CONN_TDEBUG
 
 

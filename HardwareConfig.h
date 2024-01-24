@@ -3,59 +3,69 @@
 
   //general config
   ////////////////
-  #define LORALINK_VERSION_STRING               "v2.3"
+  #define LORALINK_VERSION_STRING               "v2.5"
   #define LORALINK_MAX_MESSAGE_SIZE             1500
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
   #define LORALINK_HARDWARE_SPIFFS              0       //device has an internal spi ffs (not longer supported)
-  #define LORALINK_HARDWARE_BATSENSE            0       //device has a power sensor 
-  #define LORALINK_HARDWARE_LED                 1       //Device has LEDs
-  #define LORALINK_HARDWARE_GPS                 1       //Device has GPS
   #define LORALINK_HARDWARE_WIFI                1       //device has WiFi
   #define LORALINK_HARDWARE_OLED                1       //device has a display
   #define LORALINK_STACKSIZE_WEBSERVER          20000  
   #define LORALINK_STACKSIZE_MODEM              8000
   #define LORALINK_STACKSIZE_MODEM_DATA         6000
   #define LORALINK_STACKSIZE_BLINK              1000
-  #define LORALINK_STACKSIZE_DISPLAY            2200
+  #define LORALINK_STACKSIZE_DISPLAY            3000
   #define LORALINK_STACKSIZE_GPS_DATA           3000
 
-  
   //behaviour
   ///////////
   #define INFO_CARD_SWITCH_INTERVAL             7000    //time in ms after the info display will be changed
   #define LORALINK_POSITION_INTERVAL_SECONDS    15
 
+  //define the device configuration to use
+  #define LORALINK_STD_DEVICE_HELTEC_V3
+  //#define LORALINK_STD_DEVICE_ESP32
+  //#define LORALINK_STD_DEVICE_TBEAM
 
+  //the definition for the described heltec V3 build
+  //this configuration contains GPS, INA219 Power Sensor, RTC
+  //you can find everything in the wiki...
+  #ifdef LORALINK_STD_DEVICE_HELTEC_V3
+    //for heltec
+    #define LORALINK_HARDWARE_ESP32V3
 
-  //hardware
-  //////////
+    //device features
+    #define LORALINK_HARDWARE_INA219              1       //device has a power sensor (INA219)
+    #define LORALINK_HARDWARE_INA219_ADDR         0x40
+    #define LORALINK_HARDWARE_LED                 0       //Device has TX & MWI LEDs
+    #define LORALINK_HARDWARE_GPS                 1       //Device has GPS    
+    #define LORALINK_HARDWARE_OLED_ROTATION       2       //display rotation (0 = none, 1 = 90 degrees clockwise, 2 = 180 degrees, 3 = 270 degrees CW)
+  #endif
   
-  //for t-beam devices uncomment this line
-  //#define LORALINK_HARDWARE_TBEAM
-
-  //for heltec
-  //#define LORALINK_HARDWARE_ESP32V3
   
-  //select ESP32 Dev Module and set the following:
-  //Flash Size: 4MB
-  //Partition Scheme: Default 4MB SPIFFS, 1.2MB APP
-  #define LORALINK_HARDWARE_ESP32
+  #ifdef LORALINK_STD_DEVICE_ESP32
+    //select ESP32 Dev Module and set the following:
+    //Flash Size: 4MB
+    //Partition Scheme: Default 4MB SPIFFS, 1.2MB APP
+    #define LORALINK_HARDWARE_ESP32
 
-  //without modem (ip only nodes)
-  //#define LORALINK_HARDWARE_ESP32_NOMODEM
+    //device features
+    #define LORALINK_HARDWARE_LED                 1       //Device has TX & MWI LEDs
+    #define LORALINK_HARDWARE_GPS                 1       //Device has GPS    
+    #define LORALINK_HARDWARE_OLED_ROTATION       0       //display rotation (0 = none, 1 = 90 degrees clockwise, 2 = 180 degrees, 3 = 270 degrees CW)
+  #endif
+
+  //standard T-Beam with an SDCard attached
+  #ifdef LORALINK_STD_DEVICE_TBEAM
+    #define LORALINK_HARDWARE_TBEAM
+
+    //device features
+    #define LORALINK_HARDWARE_LED                 0       //Device has TX & MWI LEDs
+    #define LORALINK_HARDWARE_GPS                 1       //Device has GPS    
+    #define LORALINK_HARDWARE_OLED_ROTATION       0       //display rotation (0 = none, 1 = 90 degrees clockwise, 2 = 180 degrees, 3 = 270 degrees CW)
+  #endif
 
 
-  //T-Echo
-  //add the following URL to boardmanager: 
-  //https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
-  //got to the boardmanager and download the Adafruit nrf52 toolchain...
-  //under boards select Nordic nRF52840 DK
-  //
-  //install (some of) libraries from the official t-echo github repo:
-  //https://github.com/Xinyuan-LilyGO/T-Echo
-  //
-  //#define LORALINK_HARDWARE_TECHO
   
     
 
@@ -91,6 +101,9 @@
     #if LORALINK_HARDWARE_SPIFFS == 1
       #include <SPIFFS.h>  
     #endif
+    #if LORALINK_HARDWARE_INA219 == 1
+      #include <Adafruit_INA219.h>
+    #endif
 
     
     #define LORALINK_HARDWARE_NAME  F("Heltec ESP32 (SX1262) WiFi LoRa 433MHz")
@@ -112,34 +125,35 @@
     #if LORALINK_HARDWARE_GPS == 1
       #include <TinyGPS.h>
       
-      #define GPS_RX_PIN                      34
-      #define GPS_TX_PIN                      12
+      #define GPS_RX_PIN                      45
+      #define GPS_TX_PIN                      46
     #endif
 
 
     //sdcard config
     #if LORALINK_HARDWARE_SDCARD == 1
-      #define LORALINK_HARDWARE_SDCARD_MISO 22
-      #define LORALINK_HARDWARE_SDCARD_MOSI 21
-      #define LORALINK_HARDWARE_SDCARD_SCK  13
-      #define LORALINK_HARDWARE_SDCARD_CS   17
+      #define LORALINK_HARDWARE_SDCARD_MISO 7
+      #define LORALINK_HARDWARE_SDCARD_MOSI 6
+      #define LORALINK_HARDWARE_SDCARD_SCK  5
+      #define LORALINK_HARDWARE_SDCARD_CS   4
     #endif
 
-    #define USER_BUTTON                      38
+    #define USER_BUTTON                     0
     #define LORALINK_HARDWARE_STATUS_LED_PIN LED
     
     #if LORALINK_HARDWARE_LED == 1
-      #define LORALINK_HARDWARE_TX_LED_PIN      32
+      #define LORALINK_HARDWARE_TX_LED_PIN   32
     #endif
   
-    #if LORALINK_HARDWARE_BATSENSE == 1
-      #define LORALINK_HARDWARE_BATSENSE_PIN    0
+    #if LORALINK_HARDWARE_INA219 == 1
+      extern Adafruit_INA219  *g_pIna219;
     #endif
   
     #if LORALINK_HARDWARE_OLED == 1
       #include <Wire.h>
       #include <Adafruit_GFX.h>
       #include <Adafruit_SSD1306.h>
+      #include "COneButtonMenu.h"
 
       #define SCREEN_WIDTH 128 // OLED display width, in pixels
       #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -185,6 +199,9 @@
     #if LORALINK_HARDWARE_SPIFFS == 1
       #include <SPIFFS.h>  
     #endif
+    #if LORALINK_HARDWARE_INA219 == 1
+      #include <Adafruit_INA219.h>
+    #endif
     
     //general hardware options
     //////////////////////////        
@@ -224,8 +241,8 @@
       #define LORALINK_HARDWARE_TX_LED_PIN 33
     #endif
   
-    #if LORALINK_HARDWARE_BATSENSE == 1
-      #define LORALINK_HARDWARE_BATSENSE_PIN 0
+    #if LORALINK_HARDWARE_INA219 == 1
+      extern Adafruit_INA219  *g_pIna219;
     #endif
   
 
@@ -233,6 +250,7 @@
       #include <Wire.h>
       #include <Adafruit_GFX.h>
       #include <Adafruit_SSD1306.h>
+      #include "COneButtonMenu.h"
 
       #define SCREEN_WIDTH 128 // OLED display width, in pixels
       #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -277,6 +295,9 @@
     #if LORALINK_HARDWARE_SPIFFS == 1
       #include <SPIFFS.h>  
     #endif
+    #if LORALINK_HARDWARE_INA219 == 1
+      #include <Adafruit_INA219.h>
+    #endif
     
     //general hardware options
     //////////////////////////        
@@ -316,8 +337,8 @@
       #define LORALINK_HARDWARE_TX_LED_PIN 33
     #endif
   
-    #if LORALINK_HARDWARE_BATSENSE == 1
-      #define LORALINK_HARDWARE_BATSENSE_PIN 0
+    #if LORALINK_HARDWARE_INA219 == 1
+      extern Adafruit_INA219  *g_pIna219;
     #endif
   
 
@@ -325,6 +346,7 @@
       #include <Wire.h>
       #include <Adafruit_GFX.h>
       #include <Adafruit_SSD1306.h>
+      #include "COneButtonMenu.h"
 
       #define SCREEN_WIDTH 128 // OLED display width, in pixels
       #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -429,6 +451,7 @@
       #include <Wire.h>
       #include <Adafruit_GFX.h>
       #include <Adafruit_SSD1306.h>
+      #include "COneButtonMenu.h"
 
       #define SCREEN_WIDTH 128 // OLED display width, in pixels
       #define SCREEN_HEIGHT 64 // OLED display height, in pixels

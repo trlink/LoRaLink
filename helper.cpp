@@ -6,24 +6,7 @@
 #include "HardwareConfig.h"
 
 
-#if LORALINK_HARDWARE_BATSENSE == 1
 
-  void adc_init()
-  {
-    analogSetAttenuation(ADC_11db);
-    analogReadResolution(12);
-  };
-  
-  
-  float battery_read()
-  {
-    int sum       = analogReadMilliVolts(LORALINK_HARDWARE_BATSENSE_PIN);
-    float voltage = (sum / 1000.0) + DeviceConfig.fBattCorrection;
-    
-    return voltage;
-  };
-  
-#endif
 
 
 bool CheckIfDeviceExist(int nDevAddr)

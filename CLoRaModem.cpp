@@ -321,6 +321,8 @@ void CLoRaModem::handleTask()
   float fSNR        = 0;
   bool  bDiscard    = false;
 
+  memset(pData, 0, MAX_DATA_LEN);
+
   this->GetModemState();
   
   if(ModemConfig.bDisableLoRaModem == false)
