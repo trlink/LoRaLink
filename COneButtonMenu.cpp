@@ -93,7 +93,8 @@ void CWSFOneButtonMenu::longPress()
   {
     if(this->m_pCurrentSelected->pSubMenu != NULL)
     {
-      this->m_pCurrentLevel = this->m_pCurrentSelected->pSubMenu;
+      this->m_pCurrentLevel     = this->m_pCurrentSelected->pSubMenu;
+      this->m_pCurrentSelected  = this->m_pCurrentSelected->pSubMenu;
       this->drawMenu();
 
       return;

@@ -122,6 +122,8 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
   //function predecl
   //////////////////
   void DisplayTask(void *pParam);
+  void DisplayBrightness0Menu();
+  void DisplayBrightness100Menu();
 #endif
 
 
@@ -196,7 +198,7 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
     ///////////
     IPAddress IP;
 
-    
+    g_nWiFiConnects  = 0;
     g_bWiFiConnected = false;
     
     WiFi.mode(WIFI_OFF);
@@ -3331,6 +3333,25 @@ void setup()
     sMenuItem *pMenu = NULL;
 
 
+    sMenuItem *pItem01 = new sMenuItem;
+    pItem01->strMenuText   = "Off";
+    pItem01->pSubMenu      = NULL;
+    pItem01->menuCallBack  = DisplayBrightness0Menu;
+
+    sMenuItem *pItem02 = new sMenuItem;
+    pItem01->pNext         = pItem02;
+    pItem02->strMenuText   = "On";
+    pItem02->pSubMenu      = NULL;
+    pItem02->menuCallBack  = DisplayBrightness100Menu;
+    pItem02->pNext         = NULL;
+
+    sMenuItem *pItem0  = new sMenuItem;
+    pItem0->strMenuText   = "Display";
+    pItem0->pSubMenu      = pItem01;
+    pItem0->menuCallBack  = NULL;
+    
+
+
     #if LORALINK_HARDWARE_GPS == 1
       //create one button menu
       sMenuItem *pItem1 = new sMenuItem;
@@ -3376,7 +3397,9 @@ void setup()
       pItem5->menuCallBack  = EnableWiFiMenu;
     #endif  
 
-    g_pOneBtnMnu          = new CWSFOneButtonMenu(&g_display, pMenu);
+    pItem0->pNext = pMenu;
+
+    g_pOneBtnMnu          = new CWSFOneButtonMenu(&g_display, pItem0);
   #endif
 
   
@@ -4337,6 +4360,8 @@ void ModemDataTask(void *pParam)
               }
               else
               {
+                g_display.ssd1306_command(SSD1306_DISPLAYON);
+                
                 g_pOneBtnMnu->openMenu();
               };
             };
@@ -5578,6 +5603,23 @@ void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen)
 {
   g_pCLoRaProtocol->handleLoRaLinkProtocolData((_sSkyNetProtocolMessage*)pProtocolMsg, pData, nDataLen);
 };
+
+
+
+void DisplayBrightness0Menu()
+{
+  g_display.ssd1306_command(SSD1306_DISPLAYOFF);
+  g_pOneBtnMnu->closeMenu();
+};
+
+
+void DisplayBrightness100Menu()
+{
+  g_display.ssd1306_command(SSD1306_DISPLAYON);
+  g_pOneBtnMnu->closeMenu();
+};
+
+
 
 //callback for menu
 void EnableEmergencyTxMenu()

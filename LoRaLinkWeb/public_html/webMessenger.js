@@ -225,307 +225,314 @@ function initWebEventReader() {
  * @returns {undefined}
  */
 function readWebEvents() {
-    $.ajax({
-        url: g_strServer + 'api/api.json',
-        type: 'POST',
-        data: '{"command": "readWebEvents", ' +
-              ' "userID": ' + $("#hfUserID").val() + ', ' +
-              ' "hash": "' + $("#hfPwdHash").val() + '"}',
-        contentType: 'application/json; charset=utf-8',
-        crossDomain: true,
-        dataType: 'json',
-        async: true,
-        headers: {
-            "accept": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
-            "Access-Control-Allow-Methods": "GET, POST"
-        },
-        success: function(msg) {
-            
-            //check if device is connected
-            if(msg["bConnected"] !== g_bConnected) {
-                g_bConnected = msg["bConnected"];
-                
-                if(g_bConnected === true) {
-                    $("#imgConnState").attr("src", "connected.png");
+    try {
+        $.ajax({
+            url: g_strServer + 'api/api.json',
+            type: 'POST',
+            data: '{"command": "readWebEvents", ' +
+                  ' "userID": ' + $("#hfUserID").val() + ', ' +
+                  ' "hash": "' + $("#hfPwdHash").val() + '"}',
+            contentType: 'application/json; charset=utf-8',
+            crossDomain: true,
+            dataType: 'json',
+            async: true,
+            headers: {
+                "accept": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                "Access-Control-Allow-Methods": "GET, POST"
+            },
+            success: function(msg) {
+
+                //check if device is connected
+                if(msg["bConnected"] !== g_bConnected) {
+                    g_bConnected = msg["bConnected"];
+
+                    if(g_bConnected === true) {
+                        $("#imgConnState").attr("src", "connected.png");
+                    }
+                    else {
+                        $("#imgConnState").attr("src", "disconnected.png");
+                    };
+                };
+
+                if(msg["bWiFiConnected"] === true) {
+                    g_bOnlineTiles = true;
                 }
                 else {
-                    $("#imgConnState").attr("src", "disconnected.png");
+                    g_bOnlineTiles = false;
                 };
-            };
-            
-            if(msg["bWiFiConnected"] === true) {
-                g_bOnlineTiles = true;
-            }
-            else {
-                g_bOnlineTiles = false;
-            };
-            
-            //gps stuff:
-            //does the device have a GPS RX connected
-            //if not disable all GPS controls
-            if(msg["bHaveGPS"] === false) {
-                $("#imgGpsState").hide();
-                $("#imgLocationTracking").hide();
-                $("#mnuItemGPS").hide();
-                
-                g_bHaveGPS = false;
-                g_bGpsValid = false;
-            }
-            else {
-                g_bHaveGPS = true;
-                
-                //does the connected dev has a valid GPS signal?
-                if(msg["bValidSignal"] === true) {
-                    
-                    if(g_bGpsValid === false) {
-                        $("#imgGpsState").attr("src", "validGPS.png");
-                    };
 
-                    //set course and enable direction 
-                    //arrow
-                    if((parseInt(msg["fCourse"]) <= 360) && (parseInt(msg["fCourse"]) >= 0)) {
-                        g_pRadar.disableCourse(false);
-                        g_pRadar.setCourse(Math.round(msg["fCourse"]));
+                //gps stuff:
+                //does the device have a GPS RX connected
+                //if not disable all GPS controls
+                if(msg["bHaveGPS"] === false) {
+                    $("#imgGpsState").hide();
+                    $("#imgLocationTracking").hide();
+                    $("#mnuItemGPS").hide();
+
+                    g_bHaveGPS = false;
+                    g_bGpsValid = false;
+                }
+                else {
+                    g_bHaveGPS = true;
+
+                    //does the connected dev has a valid GPS signal?
+                    if(msg["bValidSignal"] === true) {
+
+                        if(g_bGpsValid === false) {
+                            $("#imgGpsState").attr("src", "validGPS.png");
+                        };
+
+                        //set course and enable direction 
+                        //arrow
+                        if((parseInt(msg["fCourse"]) <= 360) && (parseInt(msg["fCourse"]) >= 0)) {
+                            g_pRadar.disableCourse(false);
+                            g_pRadar.setCourse(Math.round(msg["fCourse"]));
+                        }
+                        else {
+                            g_pRadar.disableCourse(true);
+                        };
                     }
                     else {
                         g_pRadar.disableCourse(true);
-                    };
-                }
-                else {
-                    g_pRadar.disableCourse(true);
 
-                    if(g_bGpsValid === true) {
-                        $("#imgGpsState").attr("src", "invalidGPS.png");
-                    };
-                };
-
-                g_bGpsValid = msg["bValidSignal"];
-                g_fLocalLat = msg["fLatitude"];
-                g_fLocalLon = msg["fLongitude"];
-                
-                if((msg["bTrackingActive"] !== g_bTrackingActive) || (g_nTrackingType !== msg["nTrackingType"])) {
-                    if(msg["bTrackingActive"] === true) {
-                        
-                        $("#imgLocationTracking").show();
-                        
-                        if($("#mnuDisableGpsTracking").hasClass("disabled") == true) {
-                            $("#mnuDisableGpsTracking").removeClass("disabled");
-                        };
-                        
-                        if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == false) {
-                            $("#mnuEnableEmergGpsTracking").addClass("disabled");
-                        };
-                        
-                        if($("#mnuEnableGpsTracking").hasClass("disabled") == false) {
-                            $("#mnuEnableGpsTracking").addClass("disabled");
-                        };
-                        
-                        if(msg["nTrackingType"] === 0) {
-                            $("#imgLocationTracking").attr("src", "locationTracking.png");
-                        }
-                        else {
-                            $("#imgLocationTracking").attr("src", "emergency-icon.png");
-                        };
-
-                        g_nTrackingType = msg["nTrackingType"];
-                    }
-                    else {
-                        $("#imgLocationTracking").hide();
-                        
-                        if($("#mnuDisableGpsTracking").hasClass("disabled") == false) {
-                            $("#mnuDisableGpsTracking").addClass("disabled");
-                        };
-                        
-                        if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == true) {
-                            $("#mnuEnableEmergGpsTracking").removeClass("disabled");
-                        };
-                        
-                        if($("#mnuEnableGpsTracking").hasClass("disabled") == true) {
-                            $("#mnuEnableGpsTracking").removeClass("disabled");
-                        };
-                    };
-                    
-                    g_bTrackingActive = msg["bTrackingActive"];
-                };
-                
-                
-                if(g_bRecordTrack !== msg["bRecordTrack"]) {
-                    g_bRecordTrack = msg["bRecordTrack"];
-                    
-                    if(g_bRecordTrack === true) {
-                        if($("#mnuRecordTrackStop").hasClass("disabled") == true) {
-                            $("#mnuRecordTrackStop").removeClass("disabled");
-                        };
-                        
-                        if($("#mnuRecordTrack").hasClass("disabled") == false) {
-                            $("#mnuRecordTrack").addClass("disabled");
-                        };
-                    }
-                    else {
-                        if($("#mnuRecordTrackStop").hasClass("disabled") == false) {
-                            $("#mnuRecordTrackStop").addClass("disabled");
-                        };
-                        
-                        if($("#mnuRecordTrack").hasClass("disabled") == true) {
-                            $("#mnuRecordTrack").removeClass("disabled");
-                        };
-                    };
-                };
-                
-                //update my pos on map
-                if(g_pMarkerMe !== null) {
-                    var newLatLng = new L.LatLng(g_fLocalLat, g_fLocalLon);
-                    g_pMarkerMe.setLatLng(newLatLng); 
-                };
-            };
-            
-            switch(msg["nEventID"]) {
-                
-                //new chat message
-                case 1: {
-                    console.log("Message received...");
-                    
-                    loadChatsFromDevice(true);
-                    
-                    if($("#hfSelectedChatID").val().length > 0) {
-                        if(parseInt($("#hfSelectedChatID").val()) > 0) {
-                            console.log("reload chat msgs for: " + $("#hfSelectedChatID").val());
-
-                            loadChatMsgs($("#hfSelectedChatID").val(), false);
-                        };
-                    };
-                };
-                break;
-                
-                //outgoing message stored on device
-                case 2: {
-                    loadUserContacts(true);
-                    loadChatsFromDevice(true);
-                    
-                    if($("#hfSelectedChatID").val().length > 0) {
-                        
-                        if(parseInt($("#hfSelectedChatID").val()) > 0) {
-                            console.log("reload chat msgs for: " + $("#hfSelectedChatID").val());
-
-                            loadChatMsgs($("#hfSelectedChatID").val(), false);
+                        if(g_bGpsValid === true) {
+                            $("#imgGpsState").attr("src", "invalidGPS.png");
                         };
                     };
 
-                    $("#dlgWait").hide();
-                    $("#dlgNewChat").modal("hide");
-                    $("#btnSendMessage2").attr("disabled", false);
-                };
-                break;
-                
-                //unable to save msg
-                case 3: {
-                    alert("Unable to store message");
-                    
-                    $("#dlgWait").hide();
-                    $("#dlgNewChat").modal("hide");  
-                    $("#btnSendMessage2").attr("disabled", false);
-                };
-                break;
-                
-                //saved outgoing shout out
-                case 6: {
-                    $("#txtMsgTextShoutOut").val("");
-                    
-                    if(g_bShoutoutLoaded === true) {
-                        
-                        if(msg["dwDataID"] !== g_dwLastShoutOut) {
-                            loadShoutOutMsgs(msg["dwDataID"]);   
+                    g_bGpsValid = msg["bValidSignal"];
+                    g_fLocalLat = msg["fLatitude"];
+                    g_fLocalLon = msg["fLongitude"];
 
-                            g_dwLastShoutOut = msg["dwDataID"];
-                        };
-                    }
-                    else {
-                        loadShoutOutMsgs(0);
-                    };
-                };
-                break;
-                
-                //incoming shout out
-                case 5: {
-                    if(g_bShoutoutLoaded === true) {
-                        if(msg["dwDataID"] !== g_dwLastShoutOut) {
-                            loadShoutOutMsgs(msg["dwDataID"]);   
+                    if((msg["bTrackingActive"] !== g_bTrackingActive) || (g_nTrackingType !== msg["nTrackingType"])) {
+                        if(msg["bTrackingActive"] === true) {
 
-                            g_dwLastShoutOut = msg["dwDataID"];
-                        };   
-                    }
-                    else {
-                        loadShoutOutMsgs(0);
-                    };
-                };
-                break;
-              
-                //received GPS position
-                case 7: {
-                    if(msg["szData"] !== null) {
-                        console.log("Received GPS Data: " + msg["szData"]);
-                        
-                        const gps = JSON.parse(msg["szData"]);
-                        
-                        console.log("Set sender " + gps.Sender + " course to " + gps.Course2 + " Distance: " + gps.Dst);
-                        
-                        g_pRadar.addPoint(gps);
-                         
-                        for(var n = 0; n < g_pNodeMarkers.length; ++n) {
-                            if(g_pNodeMarkers[n].key === gps.Sender.toString()) {
-                                var newLatLng = new L.LatLng(parseFloat(gps.Lat), parseFloat(gps.Lon));
-                    
-                                g_pNodeMarkers[n].value.Marker.setLatLng(newLatLng); 
-                                
-                                break;
+                            $("#imgLocationTracking").show();
+
+                            if($("#mnuDisableGpsTracking").hasClass("disabled") == true) {
+                                $("#mnuDisableGpsTracking").removeClass("disabled");
                             };
-                        };
-                        
-                        //check if emergency signal
-                        if(gps.Type !== 0) {
-                            var oNode      = getNodeByID(gps.Sender);
-                            var strDevName = "Unknown";
-                            
-                            $('#hfEmergSenderID').val(gps.Sender);
-                            
-                            if(oNode !== null) {
-                                strDevName = oNode.DevName;
+
+                            if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == false) {
+                                $("#mnuEnableEmergGpsTracking").addClass("disabled");
                             };
-                            
-                            if(g_bEmergencyConf === false) {
-                                $("#spanWarningMsg").html("<b>Device: " + gps.Sender + " (" + strDevName + ")</b><br/>Sends emergecy beacon!<br/>");
-                                $("#dlgWarningEmergInfo").modal("show");
+
+                            if($("#mnuEnableGpsTracking").hasClass("disabled") == false) {
+                                $("#mnuEnableGpsTracking").addClass("disabled");
+                            };
+
+                            if(msg["nTrackingType"] === 0) {
+                                $("#imgLocationTracking").attr("src", "locationTracking.png");
                             }
                             else {
-                                if(g_lLastEmergeID !== gps.Sender) {
+                                $("#imgLocationTracking").attr("src", "emergency-icon.png");
+                            };
+
+                            g_nTrackingType = msg["nTrackingType"];
+                        }
+                        else {
+                            $("#imgLocationTracking").hide();
+
+                            if($("#mnuDisableGpsTracking").hasClass("disabled") == false) {
+                                $("#mnuDisableGpsTracking").addClass("disabled");
+                            };
+
+                            if($("#mnuEnableEmergGpsTracking").hasClass("disabled") == true) {
+                                $("#mnuEnableEmergGpsTracking").removeClass("disabled");
+                            };
+
+                            if($("#mnuEnableGpsTracking").hasClass("disabled") == true) {
+                                $("#mnuEnableGpsTracking").removeClass("disabled");
+                            };
+                        };
+
+                        g_bTrackingActive = msg["bTrackingActive"];
+                    };
+
+
+                    if(g_bRecordTrack !== msg["bRecordTrack"]) {
+                        g_bRecordTrack = msg["bRecordTrack"];
+
+                        if(g_bRecordTrack === true) {
+                            if($("#mnuRecordTrackStop").hasClass("disabled") == true) {
+                                $("#mnuRecordTrackStop").removeClass("disabled");
+                            };
+
+                            if($("#mnuRecordTrack").hasClass("disabled") == false) {
+                                $("#mnuRecordTrack").addClass("disabled");
+                            };
+                        }
+                        else {
+                            if($("#mnuRecordTrackStop").hasClass("disabled") == false) {
+                                $("#mnuRecordTrackStop").addClass("disabled");
+                            };
+
+                            if($("#mnuRecordTrack").hasClass("disabled") == true) {
+                                $("#mnuRecordTrack").removeClass("disabled");
+                            };
+                        };
+                    };
+
+                    //update my pos on map
+                    if(g_pMarkerMe !== null) {
+                        var newLatLng = new L.LatLng(g_fLocalLat, g_fLocalLon);
+                        g_pMarkerMe.setLatLng(newLatLng); 
+                    };
+                };
+
+                switch(msg["nEventID"]) {
+
+                    //new chat message
+                    case 1: {
+                        console.log("Message received...");
+
+                        loadChatsFromDevice(true);
+
+                        if($("#hfSelectedChatID").val().length > 0) {
+                            if(parseInt($("#hfSelectedChatID").val()) > 0) {
+                                console.log("reload chat msgs for: " + $("#hfSelectedChatID").val());
+
+                                loadChatMsgs($("#hfSelectedChatID").val(), false);
+                            };
+                        };
+                    };
+                    break;
+
+                    //outgoing message stored on device
+                    case 2: {
+                        loadUserContacts(true);
+                        loadChatsFromDevice(true);
+
+                        if($("#hfSelectedChatID").val().length > 0) {
+
+                            if(parseInt($("#hfSelectedChatID").val()) > 0) {
+                                console.log("reload chat msgs for: " + $("#hfSelectedChatID").val());
+
+                                loadChatMsgs($("#hfSelectedChatID").val(), false);
+                            };
+                        };
+
+                        $("#dlgWait").hide();
+                        $("#dlgNewChat").modal("hide");
+                        $("#btnSendMessage2").attr("disabled", false);
+                    };
+                    break;
+
+                    //unable to save msg
+                    case 3: {
+                        alert("Unable to store message");
+
+                        $("#dlgWait").hide();
+                        $("#dlgNewChat").modal("hide");  
+                        $("#btnSendMessage2").attr("disabled", false);
+                    };
+                    break;
+
+                    //saved outgoing shout out
+                    case 6: {
+                        $("#txtMsgTextShoutOut").val("");
+
+                        if(g_bShoutoutLoaded === true) {
+
+                            if(msg["dwDataID"] !== g_dwLastShoutOut) {
+                                loadShoutOutMsgs(msg["dwDataID"]);   
+
+                                g_dwLastShoutOut = msg["dwDataID"];
+                            };
+                        }
+                        else {
+                            loadShoutOutMsgs(0);
+                        };
+                    };
+                    break;
+
+                    //incoming shout out
+                    case 5: {
+                        if(g_bShoutoutLoaded === true) {
+                            if(msg["dwDataID"] !== g_dwLastShoutOut) {
+                                loadShoutOutMsgs(msg["dwDataID"]);   
+
+                                g_dwLastShoutOut = msg["dwDataID"];
+                            };   
+                        }
+                        else {
+                            loadShoutOutMsgs(0);
+                        };
+                    };
+                    break;
+
+                    //received GPS position
+                    case 7: {
+                        if(msg["szData"] !== null) {
+                            console.log("Received GPS Data: " + msg["szData"]);
+
+                            const gps = JSON.parse(msg["szData"]);
+
+                            console.log("Set sender " + gps.Sender + " course to " + gps.Course2 + " Distance: " + gps.Dst);
+
+                            g_pRadar.addPoint(gps);
+
+                            for(var n = 0; n < g_pNodeMarkers.length; ++n) {
+                                if(g_pNodeMarkers[n].key === gps.Sender.toString()) {
+                                    var newLatLng = new L.LatLng(parseFloat(gps.Lat), parseFloat(gps.Lon));
+
+                                    g_pNodeMarkers[n].value.Marker.setLatLng(newLatLng); 
+
+                                    break;
+                                };
+                            };
+
+                            //check if emergency signal
+                            if(gps.Type !== 0) {
+                                var oNode      = getNodeByID(gps.Sender);
+                                var strDevName = "Unknown";
+
+                                $('#hfEmergSenderID').val(gps.Sender);
+
+                                if(oNode !== null) {
+                                    strDevName = oNode.DevName;
+                                };
+
+                                if(g_bEmergencyConf === false) {
                                     $("#spanWarningMsg").html("<b>Device: " + gps.Sender + " (" + strDevName + ")</b><br/>Sends emergecy beacon!<br/>");
                                     $("#dlgWarningEmergInfo").modal("show");
+                                }
+                                else {
+                                    if(g_lLastEmergeID !== gps.Sender) {
+                                        $("#spanWarningMsg").html("<b>Device: " + gps.Sender + " (" + strDevName + ")</b><br/>Sends emergecy beacon!<br/>");
+                                        $("#dlgWarningEmergInfo").modal("show");
+                                    };
                                 };
                             };
                         };
                     };
+                    break;
                 };
-                break;
-            };
-            
-            g_bWaitingEvent = false;
-        },
-        error: function (msg) {
 
-            console.log("Unable to read events");
-            console.log(JSON.stringify(msg));
-            
-            if(g_bConnected === true) {
-                g_bConnected = false;
+                g_bWaitingEvent = false;
+            },
+            error: function (msg) {
 
-                $("#imgConnState").attr("src", "disconnected.png");
-            };
-            
-            g_bWaitingEvent = false;
-        }
-    });
+                console.log("Unable to read events");
+                console.log(JSON.stringify(msg));
+
+                if(g_bConnected === true) {
+                    g_bConnected = false;
+
+                    $("#imgConnState").attr("src", "disconnected.png");
+                };
+
+                g_bWaitingEvent = false;
+            }
+        });
+    }
+    catch(Exception) {
+        console.log(Exception);
+        
+        g_bWaitingEvent = false;
+    };
 };
 
 
@@ -951,64 +958,77 @@ async function tileCheck() {
     if(g_aTileCheck.length > 0) {
         
         if(g_bOverwriteTiles === false) {
-            console.log("tileCheck: check tile: " + g_aTileCheck[0]);
+            //check if we already check a tile, since this is async,
+            //i saw it happen, that the timer was triggered even if
+            //the prev function was not finished yet (since it is async).
+            //this would increase the number of connections to the dev...
+            if(g_bTileDownload === false) {
+                
+                g_bTileDownload = true;
+                console.log("tileCheck: check tile: " + g_aTileCheck[0]);
 
-            if(g_strMapView === "map") {
-                //OSM returns an URL 
-                //get the image path 
-                //since the source is openstreetmap, search for .org
-                strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
+                if(g_strMapView === "map") {
+                    //OSM returns an URL 
+                    //get the image path 
+                    //since the source is openstreetmap, search for .org
+                    strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
 
-                //try to create the path, don't care if it exist...
-                strFile = "/tiles" + strFile;
-            }
-            else {
-                //get the image path 
-                //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
-                strX = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("x=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("x=")));
-                strY = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("y=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("y=")));
-                strZ = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("z=") + 2);
-
-                //try to create the path (z, x, y), don't care if it exist...
-                strFile = "/tiles_sat/" + strZ + "/" + strX + "/" + strY + ".png";
-            };
-
-            console.log("file: " + strFile);
-
-            //check if tile exist on the device
-            $.ajax({
-                url: g_strServer + 'api/api.json',
-                type: 'POST',
-                data: '{"command": "fileExist", ' +
-                      ' "file": "' + strFile + '"' +
-                      '}',
-                contentType: 'application/json; charset=utf-8',
-                crossDomain: true,
-                dataType: 'json',
-                async: false,
-                headers: {
-                    "accept": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
-                    "Access-Control-Allow-Methods": "GET, POST"
-                },
-                success: async function(msg) {
-
-                    console.log(JSON.stringify(msg));
-
-                    if(msg["response"] === "ERR") {
-                        if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
-                            g_aTileDownloader.push(g_aTileCheck[0]);
-                        };        
-                    };
-                },
-                error: function (msg) {
-
-                    console.log(JSON.stringify(msg));
+                    //try to create the path, don't care if it exist...
+                    strFile = "/tiles" + strFile;
                 }
-            });
-            
-            g_aTileCheck.splice(0, 1);
+                else {
+                    //get the image path 
+                    //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
+                    strX = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("x=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("x=")));
+                    strY = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("y=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("y=")));
+                    strZ = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("z=") + 2);
+
+                    //try to create the path (z, x, y), don't care if it exist...
+                    strFile = "/tiles_sat/" + strZ + "/" + strX + "/" + strY + ".png";
+                };
+
+                console.log("file: " + strFile);
+
+                //check if tile exist on the device
+                $.ajax({
+                    url: g_strServer + 'api/api.json',
+                    type: 'POST',
+                    data: '{"command": "fileExist", ' +
+                          ' "file": "' + strFile + '"' +
+                          '}',
+                    contentType: 'application/json; charset=utf-8',
+                    crossDomain: true,
+                    dataType: 'json',
+                    async: true,
+                    headers: {
+                        "accept": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                        "Access-Control-Allow-Methods": "GET, POST"
+                    },
+                    success: async function(msg) {
+
+                        console.log(JSON.stringify(msg));
+
+                        if(msg["response"] === "ERR") {
+                            if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
+                                g_aTileDownloader.push(g_aTileCheck[0]);
+                            };        
+                        };
+
+                        //remove tile from array
+                        g_aTileCheck.splice(0, 1);
+                        
+                        g_bTileDownload = false;
+                    },
+                    error: function (msg) {
+
+                        console.log(JSON.stringify(msg));
+                        
+                        g_bTileDownload = false;
+                    }
+                });
+            };
         }
         else {
             while(g_aTileCheck.length > 0) {
@@ -1088,36 +1108,44 @@ async function tileDownloader() {
                     strFolder = strPath;
                     console.log("Create dir: " + strPath);
 
-                    $.ajax({
-                        url: g_strServer + 'api/api.json',
-                        type: 'POST',
-                        crossDomain: true,
-                        data: '{"command": "createFolder", ' +
-                              ' "NewFolder": "' + strPath + '", ' +
-                              ' "Folder": ""}',
-                        contentType: 'application/json; charset=utf-8',
-                        dataType: 'json',
-                        async: false,
-                        success: function(msg) {
+                    try {
+                        $.ajax({
+                            url: g_strServer + 'api/api.json',
+                            type: 'POST',
+                            crossDomain: true,
+                            data: '{"command": "createFolder", ' +
+                                  ' "NewFolder": "' + strPath + '", ' +
+                                  ' "Folder": ""}',
+                            contentType: 'application/json; charset=utf-8',
+                            dataType: 'json',
+                            async: false,
+                            success: function(msg) {
 
-                        },
-                        error: function (msg) {
-                            console.log("Error create folder:");
+                            },
+                            error: function (msg) {
+                                console.log("Error create folder:");
 
-                            console.log(JSON.stringify(msg));
-                            
-                            g_bTileDownload = false;
-                            bErr            = true;
-                        }
-                    });                    
+                                console.log(JSON.stringify(msg));
+
+                                g_bTileDownload = false;
+                                bErr            = true;
+                            }
+                        });     
+                    }
+                    catch(Exception) {
+                        console.log(Exception);
+
+                        g_bTileDownload = false;
+                        bErr            = true;
+                    };
                 };
             };
 
             if(bErr === false) {
                 //path should exist now, download the file
-                const res = await downloadImage(strFolder, strFile, g_aTileDownloader[0]);
-
-                g_aTileDownloader.splice(0, 1);
+                if(await downloadImage(strFolder, strFile, g_aTileDownloader[0]) === true) {
+                    g_aTileDownloader.splice(0, 1);
+                };
             };
             
             g_bTileDownload = false;
@@ -1145,32 +1173,41 @@ async function tileDownloader() {
  * @returns {unresolved}
  */
 async function downloadImage(strPath, strFile, imageSrc) {
-    //variables
-    ///////////
-    const form          = document.getElementById("frmFileUpload");
-    const fileInput     = document.getElementById('file');
-    const dataTransfer  = new DataTransfer();
-    const image         = await fetch(imageSrc);
-    const imageBlob     = await image.blob();
-    var strFileName     = strFile.replace(strPath, "");
-    const file          = new File([imageBlob], strFileName.substring(1), { type: imageBlob.type });
-    
-  
-    console.log("Save data from " + imageSrc + " to folder: " + strPath + " file: " + strFileName.substring(1));
-    
-    dataTransfer.items.add(file);
-    fileInput.files = dataTransfer.files;
-    
-    var fd = new FormData(form);
-    const res = await uploadFile(fd, strPath); 
+    try {
+        //variables
+        ///////////
+        const form          = document.getElementById("frmFileUpload");
+        const fileInput     = document.getElementById('file');
+        const dataTransfer  = new DataTransfer();
+        const image         = await fetch(imageSrc);
+        const imageBlob     = await image.blob();
+        var strFileName     = strFile.replace(strPath, "");
+        const file          = new File([imageBlob], strFileName.substring(1), { type: imageBlob.type });
 
-    //update progress bar
-    $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
-    $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileDownloader.length) * 100) + "%");
+
+        console.log("Save data from " + imageSrc + " to folder: " + strPath + " file: " + strFileName.substring(1));
+
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        var fd = new FormData(form);
+        const res = await uploadFile(fd, strPath); 
+
+        //update progress bar
+        $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
+        $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileDownloader.length) * 100) + "%");
+        
+        g_bTileDownload = false; 
     
-    g_bTileDownload = false; 
-    
-    return res;
+        return true;
+    }
+    catch(Exception) {
+        console.log(Exception);
+        
+        g_bTileDownload = false; 
+        
+        return false;
+    };
 };
 
 
@@ -1184,13 +1221,20 @@ async function downloadImage(strPath, strFile, imageSrc) {
  * @returns {unresolved}
  */
 async function uploadFile(formData, strPath) {
-    return fetch("/upload?folder=" + encodeURI(strPath),
-        {
-          method: 'POST',
-          body: formData
-        }
-    )
-    .then((response)=> { return response; });
+    try {
+        return fetch("/upload?folder=" + encodeURI(strPath),
+            {
+              method: 'POST',
+              body: formData
+            }
+        )
+        .then((response)=> { return response; });
+    }
+    catch(Exception) {
+        console.log(Exception);
+        
+        return false;
+    };
 }
 
 

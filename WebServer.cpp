@@ -74,6 +74,7 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
   std::string     mimeType;
   std::string     name;
   size_t          semicolonPos;
+  long            lTimeout;
 
   #ifdef WEBSERVERDEBUG
     Serial.println(F("--> handleFormUpload()"));
@@ -114,7 +115,11 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     return;
   };
 
-  while((parser->nextField() == true) && (parser->endOfField() == false)) 
+  //when the browser stopped sending data, avoid 
+  //running an endless loop...
+  lTimeout = millis() + 15000;
+
+  while((parser->nextField() == true) && (parser->endOfField() == false) && (lTimeout > millis())) 
   {
     // For Multipart data, each field has three properties:
     // The name ("name" value of the <input> tag)
@@ -150,7 +155,7 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
           
           // With endOfField you can check whether the end of field has been reached or if there's
           // still data pending. With multipart bodies, you cannot know the field size in advance.
-          while (!parser->endOfField()) 
+          while((!parser->endOfField()) && (lTimeout > millis()))
           {
             readLength = parser->read(buf, MAX_FILE_RESP_BUFF_SIZE);
     
@@ -162,6 +167,8 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
               #endif
               
               file.write(buf, readLength);
+
+              lTimeout = millis() + 15000;
             };
           };
           
@@ -184,6 +191,15 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
   };
 
   if (!didwrite) {
+    res->setStatusCode(500);
+  };
+
+  if(lTimeout <= millis())
+  {
+    #ifdef WEBSERVERDEBUG
+      Serial.println(F("handleFormUpload() Timeout waiting for Data!"));
+    #endif
+
     res->setStatusCode(500);
   };
   
