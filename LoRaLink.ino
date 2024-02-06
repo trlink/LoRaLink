@@ -18,7 +18,7 @@
 #include "CWebEvent.h"
 #include "CWSFLinkedList.h"
 #include "CSkyNetRouting.h"
-
+#include "CWSFKissParser.h"
 
 
 //https://randomnerdtutorials.com/esp32-send-email-smtp-server-arduino-ide/
@@ -59,7 +59,8 @@ void ModemDataTask(void *pParam);
 void OnSchedule(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData);
 void OnTaskScheduleRemove(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, int nNumberOfExec, int nMaxTries, byte *pData, bool bSuccess);
 void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen);
-
+void OnSerialKissPacketComplete(char *pszData, int nLen);
+void OnLoRaKissPacketComplete(char *pszData, int nLen);
 
 
 //globals
@@ -79,6 +80,10 @@ CSkyNetConnection      *g_pSkyNetConnection     = new CSkyNetConnection(g_pDbTas
 CLoRaLinkProtocol      *g_pCLoRaProtocol        = new CLoRaLinkProtocol(g_pSkyNetConnection, g_pDbTaskScheduler);
 char                    g_szFileSystem[10];
 CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
+bool                    g_bAx25Mode             = false;
+CWSFKissParser         *g_pLoRaKissParser       = NULL;
+
+
 
 
 #if LORALINK_HARDWARE_INA219 == 1
@@ -124,6 +129,7 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
   void DisplayTask(void *pParam);
   void DisplayBrightness0Menu();
   void DisplayBrightness100Menu();
+  void CloseMenu();
 #endif
 
 
@@ -157,6 +163,8 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
   int                     g_nWebserverCheck     = 0;
   long                    g_lWiFiShutdownTimer  = 0;
   bool                    g_bWiFiConnected      = false;
+  bool                    g_bDisableWifiConnect = false;
+  
   
   //function predecl
   //////////////////
@@ -166,20 +174,34 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
   void DisableWiFi();
   void EnableWiFiMenu();
   void DisableWiFiMenu();
+  void DisableWiFiConnect();
+
+  void DisableWiFiConnect()
+  {
+    DisableWiFi();
+    
+    g_bDisableWifiConnect = true;
+    
+    EnableWiFi();
+
+    CloseMenu();
+  };
   
     
   void EnableWiFiMenu()
   {
+    g_bDisableWifiConnect = false;
+    
     EnableWiFi();
 
-    g_pOneBtnMnu->closeMenu();
+    CloseMenu();
   };
   
   void DisableWiFiMenu()
   {
     DisableWiFi();
 
-    g_pOneBtnMnu->closeMenu();
+    CloseMenu();
   };
 
 
@@ -187,6 +209,7 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
   void DisableWiFi()
   {
     LoRaWiFiApCfg.bWiFiEnabled = false;
+    
     WiFi.mode(WIFI_OFF);
   };
 
@@ -238,7 +261,7 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
 
 
     //check for WiFi Connect
-    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+    if((strlen(LoRaWiFiCfg.szWLANSSID) > 0) && (g_bDisableWifiConnect == false))
     {
       Serial.print(F("Connect to WiFi: "));
       Serial.println(LoRaWiFiCfg.szWLANSSID);
@@ -3244,10 +3267,54 @@ CWSFLinkedList         *g_pModemMessages        = new CWSFLinkedList();
 #endif
 
 
+//this function changes the lora link device to an AX25 modem,
+//which can be used with packet daio software using the serial port
+//to get back to normal operation you need to reset the device!
+void switchToAx25()
+{
+  //variables
+  ///////////  
+  _sModemData *pModemData;
+  
+  Serial.println(F("Switch to AX25"));
+  
+  if(g_bAx25Mode == false)
+  {
+    g_bAx25Mode = true;
+    
+    delete g_pDbTaskScheduler;
+    g_pDbTaskScheduler = NULL;
+    
+    delete g_pSkyNetConnection;
+    g_pSkyNetConnection = NULL;
 
-//https://www.hackster.io/superturis/make-your-own-sd-shield-101fd7
+    g_pLoRaKissParser = new CWSFKissParser(OnLoRaKissPacketComplete);
 
+    //clear modem data queue, will now be used to send data, instead of receiving
+    if(g_pModemMessages->getItemCount() > 0)
+    { 
+      g_pModemMessages->itterateStart();
+  
+      do 
+      {
+        pModemData = (_sModemData*)g_pModemMessages->getNextItem();
+    
+        if(pModemData != NULL)
+        {      
+          g_pModemMessages->removeItem(pModemData);
 
+          delete pModemData->pData;
+          delete pModemData;
+        };        
+      } while(pModemData != NULL);
+    };
+
+    LLSystemState.lBlocksToTransfer = 0;
+    LLSystemState.lOutstandingMsgs  = 0;
+  };
+
+  CloseMenu();
+};
 
 
 
@@ -3330,74 +3397,130 @@ void setup()
     g_display.print(F(" Init:\n"));
     g_display.display();
 
-    sMenuItem *pMenu = NULL;
 
+    //create one button menu
+    sMenuItem *pMenu       = NULL;
+    
 
-    sMenuItem *pItem01 = new sMenuItem;
+    //display menu
+    sMenuItem *pItem01     = new sMenuItem;
     pItem01->strMenuText   = "Off";
     pItem01->pSubMenu      = NULL;
     pItem01->menuCallBack  = DisplayBrightness0Menu;
 
-    sMenuItem *pItem02 = new sMenuItem;
+    sMenuItem *pItem02     = new sMenuItem;
     pItem01->pNext         = pItem02;
     pItem02->strMenuText   = "On";
     pItem02->pSubMenu      = NULL;
     pItem02->menuCallBack  = DisplayBrightness100Menu;
     pItem02->pNext         = NULL;
 
-    sMenuItem *pItem0  = new sMenuItem;
-    pItem0->strMenuText   = "Display";
-    pItem0->pSubMenu      = pItem01;
-    pItem0->menuCallBack  = NULL;
-    
+    sMenuItem *pItem0      = new sMenuItem;
+    pItem0->strMenuText    = "Display";
+    pItem0->pSubMenu       = pItem01;
+    pItem0->menuCallBack   = NULL;
+
+
+    //ax25 menu
+    sMenuItem *pItem1     = new sMenuItem;
+
+    pItem1->pNext         = NULL;
+    pItem1->strMenuText   = "Start AX25 Mode";
+    pItem1->pSubMenu      = NULL;
+    pItem1->menuCallBack  = switchToAx25;
+
+    //link to prev menu
+    pItem0->pNext         = pItem1;
+
+
+    //close menu
+    sMenuItem *pItem4     = new sMenuItem;
+
+    pItem4->pNext         = NULL;
+    pItem4->strMenuText   = "Close";
+    pItem4->pSubMenu      = NULL;
+    pItem4->menuCallBack  = CloseMenu;
+
+    pItem1->pNext         = pItem4;
 
 
     #if LORALINK_HARDWARE_GPS == 1
-      //create one button menu
-      sMenuItem *pItem1 = new sMenuItem;
-      sMenuItem *pItem2 = new sMenuItem;
-      sMenuItem *pItem3 = new sMenuItem;
+      sMenuItem *pItem2  = new sMenuItem;
 
-      pItem1->pNext = pItem2;
-      pItem2->pNext = pItem3;
-      pItem3->pNext = NULL;
+      //link to prev menu
+      pItem1->pNext      = pItem2;
       
-      pItem1->strMenuText   = "EMERGENCY TX";
-      pItem1->pSubMenu      = NULL;
-      pItem1->menuCallBack  = EnableEmergencyTxMenu;
-      pItem2->strMenuText   = "POSITION TX";
-      pItem2->pSubMenu      = NULL;
-      pItem2->menuCallBack  = EnablePositionTxMenu;  
-      pItem3->strMenuText   = "POSITION TX OFF";
-      pItem3->pSubMenu      = NULL;
-      pItem3->menuCallBack  = DisablePositionTxMenu;  
-      pMenu = pItem1;
+      //create one button menu
+      sMenuItem *pItem21 = new sMenuItem;
+      sMenuItem *pItem22 = new sMenuItem;
+      sMenuItem *pItem23 = new sMenuItem;
+      sMenuItem *pItem24 = new sMenuItem;
+
+      pItem2->pNext         = pItem4;
+      pItem2->strMenuText   = "Send GPS Position";
+      pItem2->pSubMenu      = pItem21;
+      pItem2->menuCallBack  = NULL;
+
+      pItem21->pNext = pItem22;
+      pItem22->pNext = pItem23;
+      pItem23->pNext = pItem24;
+      pItem24->pNext = NULL;
+      
+      pItem21->strMenuText   = "EMERGENCY TX";
+      pItem21->pSubMenu      = NULL;
+      pItem21->menuCallBack  = EnableEmergencyTxMenu;
+      pItem22->strMenuText   = "POSITION TX";
+      pItem22->pSubMenu      = NULL;
+      pItem22->menuCallBack  = EnablePositionTxMenu;  
+      pItem23->strMenuText   = "POSITION TX OFF";
+      pItem23->pSubMenu      = NULL;
+      pItem23->menuCallBack  = DisablePositionTxMenu;  
+      pItem24->strMenuText   = "Back";
+      pItem24->pSubMenu      = pItem0;
+      pItem24->menuCallBack  = NULL;  
     #endif
+
     
     
     
     #if LORALINK_HARDWARE_WIFI == 1
-      sMenuItem *pItem4 = new sMenuItem;
-      sMenuItem *pItem5 = new sMenuItem;
+      sMenuItem *pItem3  = new sMenuItem;
+      sMenuItem *pItem31 = new sMenuItem;
+      sMenuItem *pItem32 = new sMenuItem;
+      sMenuItem *pItem33 = new sMenuItem;
+      sMenuItem *pItem34 = new sMenuItem;
 
       #if LORALINK_HARDWARE_GPS == 1
-        pItem3->pNext = pItem4;
+        pItem1->pNext = pItem2;
+        pItem2->pNext = pItem3;
       #else
-        pMenu = pItem4;
+        pItem1->pNext = pItem3;
       #endif
+
+      pItem3->strMenuText   = "WiFi";
+      pItem3->pSubMenu      = pItem31;
+      pItem3->menuCallBack  = NULL;
+      pItem3->pNext         = pItem4;
       
-      pItem4->pNext = pItem5;
-      pItem5->pNext = NULL;
+      pItem31->pNext = pItem32;
+      pItem32->pNext = pItem33;
+      pItem33->pNext = pItem34;
+      pItem34->pNext = NULL;
 
-      pItem4->strMenuText   = "WiFi Off";
-      pItem4->pSubMenu      = NULL;
-      pItem4->menuCallBack  = DisableWiFiMenu;
-      pItem5->strMenuText   = "WiFi On";
-      pItem5->pSubMenu      = NULL;
-      pItem5->menuCallBack  = EnableWiFiMenu;
-    #endif  
+      pItem31->strMenuText   = "WiFi Off";
+      pItem31->pSubMenu      = NULL;
+      pItem31->menuCallBack  = DisableWiFiMenu;
+      pItem32->strMenuText   = "WiFi On";
+      pItem32->pSubMenu      = NULL;
+      pItem32->menuCallBack  = EnableWiFiMenu;
+      pItem33->strMenuText   = "Disable connect";
+      pItem33->pSubMenu      = NULL;
+      pItem33->menuCallBack  = DisableWiFiConnect;
+      pItem34->strMenuText   = "Back";
+      pItem34->pSubMenu      = pItem0;
+      pItem34->menuCallBack  = NULL;  
+    #endif 
 
-    pItem0->pNext = pMenu;
 
     g_pOneBtnMnu          = new CWSFOneButtonMenu(&g_display, pItem0);
   #endif
@@ -3911,73 +4034,147 @@ void loop()
 {
   //variables
   ///////////
-  long            lCheckTimer = 0;
+  long            lCheckTimer   = 0;
+  CWSFKissParser  *pKissParser  = NULL;
 
   esp_task_wdt_init(180, false);
 
   while(true)
   {
-    #if LORALINK_HARDWARE_WIFI == 1
-      //turn wifi off, 5min after startup, when the 
-      //device is a repeater without login
-      if((DeviceConfig.nDeviceType == DEVICE_TYPE_REPEATER) && (millis() > g_lWiFiShutdownTimer) && (g_lWiFiShutdownTimer != 0))
-      {
-        g_lWiFiShutdownTimer        = 0;
-        LoRaWiFiApCfg.bWiFiEnabled  = false;
-        
-        WiFi.mode(WIFI_OFF);
-      };
-    #endif
-    
-    LLSystemState.lMemFreeOverall           = esp_get_free_heap_size();
-
-    //halt the scheduler, if the system is not connected to
-    //another node...
-    g_pDbTaskScheduler->haltScheduler(!LLSystemState.bConnected);
-
-
-    //check free space
-    if(lCheckTimer < millis())
+    if(g_bAx25Mode == false)
     {
-      lCheckTimer                           = millis() + 10000;
-      
-      LLSystemState.bConnected              = g_pSkyNetConnection->isConnected();
-      
-      #if LORALINK_HARDWARE_SPIFFS == 1
-        LLSystemState.lIntSpiBytesUsed      = SPIFFS.usedBytes();
-        LLSystemState.lIntSpiBytesAvail     = SPIFFS.totalBytes();
-      #else
-        LLSystemState.lIntSpiBytesUsed      = 0;
-        LLSystemState.lIntSpiBytesAvail     = 0;
+      #if LORALINK_HARDWARE_WIFI == 1
+        //turn wifi off, 5min after startup, when the 
+        //device is a repeater without login
+        if((DeviceConfig.nDeviceType == DEVICE_TYPE_REPEATER) && (millis() > g_lWiFiShutdownTimer) && (g_lWiFiShutdownTimer != 0))
+        {
+          g_lWiFiShutdownTimer        = 0;
+          LoRaWiFiApCfg.bWiFiEnabled  = false;
+          
+          WiFi.mode(WIFI_OFF);
+        };
       #endif
+      
+      LLSystemState.lMemFreeOverall           = esp_get_free_heap_size();
   
-      #if LORALINK_HARDWARE_SDCARD == 1
-        LLSystemState.lExtSpiBytesUsed      = SD.usedBytes();
-        LLSystemState.lExtSpiBytesAvail     = SD.totalBytes();
-      #else
-        LLSystemState.lExtSpiBytesUsed      = 0;
-        LLSystemState.lExtSpiBytesAvail     = 0;
+      //halt the scheduler, if the system is not connected to
+      //another node...
+      g_pDbTaskScheduler->haltScheduler(!LLSystemState.bConnected);
+  
+  
+      //check free space
+      if(lCheckTimer < millis())
+      {
+        lCheckTimer                           = millis() + 10000;
+        
+        LLSystemState.bConnected              = g_pSkyNetConnection->isConnected();
+        
+        #if LORALINK_HARDWARE_SPIFFS == 1
+          LLSystemState.lIntSpiBytesUsed      = SPIFFS.usedBytes();
+          LLSystemState.lIntSpiBytesAvail     = SPIFFS.totalBytes();
+        #else
+          LLSystemState.lIntSpiBytesUsed      = 0;
+          LLSystemState.lIntSpiBytesAvail     = 0;
+        #endif
+    
+        #if LORALINK_HARDWARE_SDCARD == 1
+          LLSystemState.lExtSpiBytesUsed      = SD.usedBytes();
+          LLSystemState.lExtSpiBytesAvail     = SD.totalBytes();
+        #else
+          LLSystemState.lExtSpiBytesUsed      = 0;
+          LLSystemState.lExtSpiBytesAvail     = 0;
+        #endif
+      };
+  
+    
+      //call the task scheduler / handler
+      g_pTaskHandler->handleTasks();
+      ResetWatchDog();
+      
+      delay(10);
+  
+      #if LORALINK_HARDWARE_WIFI == 1
+        //handle the messages received by the webserver
+        handleQueuedMessages();
+  
+        HandleLoRaLinkReconnect();
       #endif
+    }
+    else
+    {
+      if(pKissParser == NULL)
+      {
+        pKissParser = new CWSFKissParser(OnSerialKissPacketComplete);
+      };
+      
+      if(Serial.available() > 0)
+      {
+        pKissParser->addData((char)Serial.read());
+      };
     };
 
-  
-    //call the task scheduler / handler
-    g_pTaskHandler->handleTasks();
     ResetWatchDog();
-    
-    delay(10);
-
-    #if LORALINK_HARDWARE_WIFI == 1
-      //handle the messages received by the webserver
-      handleQueuedMessages();
-
-      HandleLoRaLinkReconnect();
-    #endif
   };
 };
 
 
 
+
+void OnSerialKissPacketComplete(char *pszData, int nLen)
+{
+  //variables
+  ///////////
+  char *pszTemp       = new char[MAX_KISS_PACKET_LEN + 1];
+  int  nPacketLength  = CWSFKissParser::getKissPacket(pszData, nLen, pszTemp); 
+  int  nPos           = 0;
+  int  nLength        = 0;
+
+  LLSystemState.lBlocksToTransfer += 1;
+  
+  do
+  {
+    if((nPacketLength - nPos) > (MAX_DATA_LEN - 5))
+    {
+      nLength = (MAX_DATA_LEN - 5);
+    }
+    else
+    {
+      nLength = nPacketLength - nPos;
+    };
+
+    //wait till everything is received in rx
+    //state or transmitted during tx state
+    do
+    {
+      ResetWatchDog();
+      delay(10);
+    } while(g_pModemTask->GetModemState() != MODEM_STATE_IDLE);
+    
+    g_pModemTask->sendData((byte*)pszTemp + nPos, nLength);
+
+    nPos += nLength;
+    
+  } while(nPos < nPacketLength);
+
+  delay(ModemConfig.lMessageTransmissionInterval);
+  
+  delete pszTemp;
+};
+
+
+void OnLoRaKissPacketComplete(char *pszData, int nLen)
+{
+  //variables
+  ///////////
+  char *pszTemp       = new char[MAX_KISS_PACKET_LEN + 1];
+  int  nPacketLength  = CWSFKissParser::getKissPacket(pszData, nLen, pszTemp); 
+
+  Serial.write(pszTemp, nPacketLength);
+
+  LLSystemState.lOutstandingMsgs += 1;
+
+  delete pszTemp;
+};
 
 
 /**
@@ -3988,29 +4185,29 @@ void OnReceivedModemData(byte *pData, int nDataLength, int nRSSI, void *pHandler
   //variables
   ///////////
   CSkyNetConnectionHandler *pModemConnHandler = (CSkyNetConnectionHandler*)pHandler;
-  _sModemData              *pModemData        = new _sModemData;
+  _sModemData              *pModemData;
+  
+  if(g_bAx25Mode == false)
+  {
+    pModemData = new _sModemData;
 
-  Serial.print(F("--> OnReceivedModemData: bytes: "));
-  Serial.println(nDataLength);
+    //only store the data, don't handle it here,
+    //otherwise the modem looses packets...
+    pModemData->nDataLength   = nDataLength;
+    pModemData->pData         = new byte[nDataLength + 1];
+    memcpy(pModemData->pData, pData, nDataLength);
+    pModemData->nRSSI         = nRSSI;
+    pModemData->pHandler      = pModemConnHandler;
+    pModemData->fPacketSNR    = fPacketSNR;
+  
+    g_pModemMessages->addItem(pModemData);
+  }
+  else
+  {
+    g_pLoRaKissParser->addData((char*)pData, nDataLength);
+  };
 
-  //only store the data, don't handle it here,
-  //otherwise the modem looses packets...
-  pModemData->nDataLength   = nDataLength;
-  pModemData->pData         = new byte[nDataLength + 1];
-  memcpy(pModemData->pData, pData, nDataLength);
-  pModemData->nRSSI         = nRSSI;
-  pModemData->pHandler      = pModemConnHandler;
-  pModemData->fPacketSNR    = fPacketSNR;
-
-  
-  
-  g_pModemMessages->addItem(pModemData);
-  
-  
   ResetWatchDog();
-
-  Serial.print(F("<-- OnReceivedModemData: bytes: "));
-  Serial.println(nDataLength);
 };
 
 
@@ -4071,17 +4268,12 @@ void ModemDataTask(void *pParam)
     
         if(pModemData != NULL)
         {
-          Serial.print(F("[ModemDataTask] --> Handle queued data - size:"));
-          Serial.println(pModemData->nDataLength);
-          
           pModemData->pHandler->handleConnData(pModemData->pData, pModemData->nDataLength, pModemData->nRSSI, pModemData->fPacketSNR);
-  
+          
           g_pModemMessages->removeItem(pModemData);
   
           delete pModemData->pData;
           delete pModemData;
-  
-          Serial.println(F("[ModemDataTask] <-- Handle queued data"));
   
           ResetWatchDog();
   
@@ -4233,7 +4425,10 @@ void ModemDataTask(void *pParam)
               ClockPtr->SetDateTime(year, month, day, hour, minute, UPDATE_SOURCE_EXTERNAL);
   
               //update schedules after reboot or initial time change
-              g_pDbTaskScheduler->rescheduleAfterTimechange();
+              if(g_pDbTaskScheduler != NULL)
+              {
+                g_pDbTaskScheduler->rescheduleAfterTimechange();
+              };
             };
 
 
@@ -4374,7 +4569,7 @@ void ModemDataTask(void *pParam)
       };
 
 
-      if(g_pOneBtnMnu->isOpen() == false)
+      if((g_pOneBtnMnu->isOpen() == false) && (g_bAx25Mode == false))
       {
         g_display.setTextSize(1);      // Normal 1:1 pixel scale
     
@@ -4549,7 +4744,68 @@ void ModemDataTask(void *pParam)
           
           g_display.display();
         };
+      }
+      else if((g_pOneBtnMnu->isOpen() == false) && (g_bAx25Mode == true))
+      {
+        g_display.setTextSize(1);
+        
+        if(lTimer < millis())
+        {
+          //2 updates / sec
+          lTimer = millis() + 500;
+          
+          g_display.clearDisplay();
+      
+          w = 110; h = 0;
+          g_display.setCursor(w, h);     // Start at top-left corner
+          
+          switch(g_pModemTask->GetModemState())
+          {
+            case MODEM_STATE_TX: { g_display.print("TX"); }; break;
+            case MODEM_STATE_RX: { g_display.print("RX"); }; break;
+            case MODEM_STATE_WAIT_RX: { g_display.print("WR"); }; break;
+            case MODEM_STATE_ERROR: { g_display.print("ER"); }; break;
+            case MODEM_STATE_IDLE: { g_display.print("--"); }; break;
+            case MODEM_STATE_WAIT_TX: { g_display.print("WT"); }; break;
+          };
+
+          w = 1; h = 0;
+          g_display.setCursor(w, h);     // Start at top-left corner
+    
+          if(ModemConfig.bDisableLoRaModem == false)
+          {
+            sprintf_P(szText, PSTR("%.3fkHz\0"), (float)ModemConfig.lFrequency / 1000000.0); 
+          }
+          else
+          {
+            strcpy_P(szText, PSTR("Radio Off\0"));
+          };
+          
+          g_display.print(szText);
+      
+          w = 0; h = 9;
+          g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
+          //end of top info
+
+          sprintf_P(szText, PSTR("Packets TX: %i\nPackets RX: %i\0"), LLSystemState.lBlocksToTransfer, LLSystemState.lOutstandingMsgs);
+              
+          w = 0; h = 13;
+          g_display.setCursor(w, h);
+          
+          g_display.print(szText);
+  
+          //bottom info
+          w = 0; h = 52;
+          g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
+          
+          w = 6; h = 54;
+          g_display.setCursor(w, h);     // Start at top-left corner
+          g_display.print(ClockPtr->GetTimeString());
+          
+          g_display.display();
+        };
       };
+
       
       ResetWatchDog();
   
@@ -5617,6 +5873,15 @@ void DisplayBrightness100Menu()
 {
   g_display.ssd1306_command(SSD1306_DISPLAYON);
   g_pOneBtnMnu->closeMenu();
+};
+
+
+void CloseMenu()
+{
+  g_pOneBtnMnu->closeMenu();
+
+  g_display.clearDisplay();
+  g_display.display();
 };
 
 

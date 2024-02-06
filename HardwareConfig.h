@@ -3,7 +3,7 @@
 
   //general config
   ////////////////
-  #define LORALINK_VERSION_STRING               "v2.5"
+  #define LORALINK_VERSION_STRING               "v2.6"
   #define LORALINK_MAX_MESSAGE_SIZE             1500
   #define LORALINK_HARDWARE_MAX_FILES           12
   #define LORALINK_HARDWARE_SDCARD              1       //device has an sdcard as storage
