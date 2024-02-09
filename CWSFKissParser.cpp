@@ -28,6 +28,20 @@ bool CWSFKissParser::addData(char cData)
   return this->addData((char*)&szData, 1);
 };
 
+
+bool CWSFKissParser::packetIncomplete()
+{
+  return (this->m_nPos > 0 ? true : false);
+};
+
+
+void CWSFKissParser::invalidatePacket()
+{
+  this->m_bEscape = false;
+  this->m_bStart  = false;
+  this->m_nPos    = 0;
+};
+
 bool CWSFKissParser::addData(char *pszData, int nLength)
 {
   for(int n = 0; n < nLength; ++n)

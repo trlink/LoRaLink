@@ -3267,9 +3267,9 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
 #endif
 
 
-//this function changes the lora link device to an AX25 modem,
+//this function changes the lora link device mode to an AX25 modem,
 //which can be used with packet daio software using the serial port
-//to get back to normal operation you need to reset the device!
+//and flexnet. To get back to normal operation you need to reset the device!
 void switchToAx25()
 {
   //variables
@@ -3281,13 +3281,16 @@ void switchToAx25()
   if(g_bAx25Mode == false)
   {
     g_bAx25Mode = true;
-    
+
+    //delete all objects running in tasks, which
+    //interfere with the packet radio mode
     delete g_pDbTaskScheduler;
     g_pDbTaskScheduler = NULL;
     
     delete g_pSkyNetConnection;
     g_pSkyNetConnection = NULL;
 
+    //create the global kiss parser
     g_pLoRaKissParser = new CWSFKissParser(OnLoRaKissPacketComplete);
 
     //clear modem data queue, will now be used to send data, instead of receiving
@@ -3309,6 +3312,7 @@ void switchToAx25()
       } while(pModemData != NULL);
     };
 
+    //this two variables are used for rx/tx count
     LLSystemState.lBlocksToTransfer = 0;
     LLSystemState.lOutstandingMsgs  = 0;
   };
@@ -3689,7 +3693,18 @@ void setup()
     };
   #endif
 
+
+
+  /*
+  SD.mkdir("/config");
+  SD.mkdir("/data");
+  */
+  
   ReadDeviceConfig();
+
+
+  
+  
 
   //check for update
   char *szHotfixFile = LORALINK_FIRMWARE_FILE;
@@ -4128,6 +4143,8 @@ void OnSerialKissPacketComplete(char *pszData, int nLen)
   int  nPacketLength  = CWSFKissParser::getKissPacket(pszData, nLen, pszTemp); 
   int  nPos           = 0;
   int  nLength        = 0;
+  long lTimeout       = millis() + 10000;
+  int  nModemState;  
 
   LLSystemState.lBlocksToTransfer += 1;
   
@@ -4142,13 +4159,28 @@ void OnSerialKissPacketComplete(char *pszData, int nLen)
       nLength = nPacketLength - nPos;
     };
 
+
     //wait till everything is received in rx
-    //state or transmitted during tx state
+    //state or transmitted during tx state and 
+    //if an actual packet is complete
     do
     {
+      nModemState = g_pModemTask->GetModemState();
+
+      if(nModemState == MODEM_STATE_RX)
+      {
+        lTimeout = millis() + 10000;
+      };
+      
       ResetWatchDog();
       delay(10);
-    } while(g_pModemTask->GetModemState() != MODEM_STATE_IDLE);
+    } while(((nModemState != MODEM_STATE_IDLE) || (g_pLoRaKissParser->packetIncomplete() == true)) && (millis() < lTimeout));
+
+    //invalidate the packet, if it timed out
+    if(millis() >= lTimeout)
+    {
+      g_pLoRaKissParser->invalidatePacket();
+    };
     
     g_pModemTask->sendData((byte*)pszTemp + nPos, nLength);
 

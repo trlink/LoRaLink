@@ -23,8 +23,8 @@
   #define LORALINK_POSITION_INTERVAL_SECONDS    15
 
   //define the device configuration to use
-  #define LORALINK_STD_DEVICE_HELTEC_V3
-  //#define LORALINK_STD_DEVICE_ESP32
+  //#define LORALINK_STD_DEVICE_HELTEC_V3
+  #define LORALINK_STD_DEVICE_ESP32
   //#define LORALINK_STD_DEVICE_TBEAM
 
   //the definition for the described heltec V3 build

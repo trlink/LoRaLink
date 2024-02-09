@@ -18,6 +18,8 @@ class CWSFKissParser
     bool addData(char cData);
     bool addData(char *pszData, int nLength);
 
+    bool packetIncomplete();
+    void invalidatePacket();
 
     static int getKissPacket(char *pszData, int nLength, char *pszPacket);
   private:
