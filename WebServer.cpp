@@ -9,12 +9,6 @@
 #include <HTTPMultipartBodyParser.hpp>
 #include <HTTPURLEncodedBodyParser.hpp>
 
- 
-
-//globals
-/////////
-HTTPServer              *g_insecureServer   = NULL;
-WebServerOnPostRequest   g_apiCallbackHandler;
 
 
 //function predecl
@@ -27,36 +21,62 @@ void handleRedirect(HTTPRequest * req, HTTPResponse * res);
 void handleUpload(HTTPRequest * req, HTTPResponse * res);
 String getContentType(String strFile);
 
+ 
+
+//globals
+/////////
+HTTPServer              *g_insecureServer         = NULL;
+WebServerOnPostRequest   g_apiCallbackHandler;
+ResourceNode            *g_nodeRoot               = new ResourceNode("/", "GET", &handleRoot);
+ResourceNode            *g_node404                = new ResourceNode("", "", &handleFile);
+ResourceNode            *g_nodeUpload             = new ResourceNode("/upload", "POST", &handleUpload);
+ResourceNode            *g_nodeAPI                = new ResourceNode("/api/api.json", "POST", &handleAPI);
+
+
+
+
 
 void StartWebservers(WebServerOnPostRequest apiHandler)
 {
   g_apiCallbackHandler = apiHandler;
 
-  
+    
   // Additionally, we create an HTTPServer for unencrypted traffic
   g_insecureServer = new HTTPServer(80, MAX_WEBSERVER_CONNECTIONS, 0);
 
-  //setup handler
-  ResourceNode *nodeRoot      = new ResourceNode("/", "GET", &handleRoot);
-  ResourceNode *node404       = new ResourceNode("", "", &handleFile);
-  ResourceNode *nodeUpload    = new ResourceNode("/upload", "POST", &handleUpload);
-  ResourceNode *nodeAPI       = new ResourceNode("/api/api.json", "POST", &handleAPI);
-
-  
-  g_insecureServer->registerNode(nodeAPI);
-  g_insecureServer->registerNode(nodeRoot);
-  g_insecureServer->registerNode(nodeUpload);
-  g_insecureServer->setDefaultNode(node404);
+  g_insecureServer->registerNode(g_nodeAPI);
+  g_insecureServer->registerNode(g_nodeRoot);
+  g_insecureServer->registerNode(g_nodeUpload);
+  g_insecureServer->setDefaultNode(g_node404);
   
   g_insecureServer->start();
 };
 
 
+void StopWebServers()
+{
+  if(g_insecureServer != NULL)
+  {
+    g_insecureServer->stop();
+    
+    delete g_insecureServer;
 
+    g_insecureServer = NULL;
+  };
+};
+
+
+bool WebserverStarted()
+{
+  return (g_insecureServer != NULL);
+};
 
 void HandleWebserver()
 {  
-  g_insecureServer->loop();
+  if(g_insecureServer != NULL)
+  {
+    g_insecureServer->loop();
+  };
 };
 
 

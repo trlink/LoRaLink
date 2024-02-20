@@ -651,6 +651,8 @@ function getWiFiApConfig() {
                 $("#txtWiFiAp_IP").val(msg["szDevIP"]);
                 $("#chkWiFiAP_HideNetwork").prop('checked', msg["bHideNetwork"]);
                 $("#txtWiFiAp_Channel").val(msg["nChannel"]);
+                $("#cmbWiFiAP_Power").selectpicker('val', msg["power"]);
+                $("#chkWiFiAP_Disabled").prop('checked', msg["bDisabled"]);
             }
             else {
                 $("#lblDesc").text("Failed to load WiFiAP config...");
@@ -1310,7 +1312,6 @@ function btnSaveDevice_Click() {
 }
 
 
-
 function btnSaveWiFiAP_Click() {
     
     $.ajax({
@@ -1323,6 +1324,8 @@ function btnSaveWiFiAP_Click() {
               ' "szWLANPWD": "' + $("#txtWiFiAp_Password").val() + '", ' +
               ' "szDevIP": "' + $("#txtWiFiAp_IP").val() + '", ' +
               ' "bHideNetwork": ' + $("#chkWiFiAP_HideNetwork").prop('checked')  + ', ' +
+              ' "bDisabled": ' + $("#chkWiFiAP_Disabled").prop('checked')  + ', ' +
+              ' "power": ' + parseIntDefault($("#cmbWiFiAP_Power").val(), 78) + ', ' +
               ' "nChannel": ' + parseIntDefault($("#txtWiFiAp_Channel").val(), 1) + ', ' +
               ' "Password": "' + $("#hfPwdHash").val() + '"}',
         contentType: 'application/json; charset=utf-8',

@@ -151,12 +151,40 @@
                             </div>
                             <br/>
                             <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <label id="lblWiFiAP_Power" for="cmbWiFiAP_Power">Output Power:</label> <br/>
+                                <select class="selectpicker form-control" id="cmbWiFiAP_Power" title="Output Power" aria-describedby="lblWiFiAP_Power">
+                                    <option value="78">19.5dBm</option>
+                                    <option value="76">19dBm</option>
+                                    <option value="74">18.5dBm</option>
+                                    <option value="68">17dBm</option>
+                                    <option value="60">15dBm</option>
+                                    <option value="52">13dBm</option>
+                                    <option value="44">11dBm</option>
+                                    <option value="34">8.5dBm</option>
+                                    <option value="28">7dBm</option>
+                                    <option value="20">5dBm</option>
+                                    <option value="8">2dBm</option>
+                                    <option value="-4">-1dBm</option>
+                                </select>
+                            </div>
+                            <br/>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
                                 <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="" id="chkWiFiAP_HideNetwork" aria-describedby="">
                                 <label style="margin-left: 15px;" class="form-check-label" for="chkWiFiAP_HideNetwork">
                                   Hide network?
                                 </label>
                                 <br/>
                                 <small class="form-text text-muted">Hide Network (don't broadcast SSID)?</small>
+                            </div>
+                            <br/>
+                            <div class="form-group" style="margin-left: 2px; margin-right:2px; position: relative;">
+                                <input style="margin-left: 0px; margin-top: 3px;" class="form-check-input" type="checkbox" value="" id="chkWiFiAP_Disabled" aria-describedby="">
+                                <label style="margin-left: 15px;" class="form-check-label" for="chkWiFiAP_Disabled">
+                                  Disabled by default?
+                                </label>
+                                <br/>
+                                <small class="form-text text-muted">Should the AP be disabled by default? You can turn it on via the User Button Menu. This helps to reduce the power consumption.</small>
                             </div>
                             <br/>
                             <div class="input-group mb-3 w-100">

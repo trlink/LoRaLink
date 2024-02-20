@@ -55,6 +55,8 @@ struct sLoRaWiFiCfg
   bool bUseDHCP;
   bool bHideNetwork;
   int  nChannel;
+  int  nPower;
+  bool bDisabled;
   //non volatile (helper variables)
   bool bWiFiEnabled;
 };

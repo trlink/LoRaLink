@@ -33,7 +33,10 @@ CSkyNetConnection::~CSkyNetConnection()
 
     if(pTask != NULL)
     {
-      this->removeHandler(pTask);
+      this->m_pList->removeItem(pTask);
+      this->m_pList->itterateStart();
+
+      delete pTask;
     
       pTask = (CSkyNetConnectionHandler*)this->m_pList->getNextItem();
     };

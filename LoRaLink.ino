@@ -132,7 +132,7 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
   void CloseMenu();
 #endif
 
-
+  
 #if LORALINK_HARDWARE_SDCARD == 1
   //variables
   ///////////
@@ -141,13 +141,16 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
 
 
 
+
+
 #if LORALINK_HARDWARE_WIFI == 1
   //includes
   //////////
   #include <WiFi.h>
-  #include "WebServer.h"
   #include <NTPClient.h>
   #include "CTCPServer.h"
+  #include "WebServer.h"
+  
   
 
   //variables
@@ -164,6 +167,7 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
   long                    g_lWiFiShutdownTimer  = 0;
   bool                    g_bWiFiConnected      = false;
   bool                    g_bDisableWifiConnect = false;
+  bool                    g_bWebTaskRunning     = false;
   
   
   //function predecl
@@ -176,108 +180,156 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
   void DisableWiFiMenu();
   void DisableWiFiConnect();
 
-  void DisableWiFiConnect()
-  {
-    DisableWiFi();
-    
-    g_bDisableWifiConnect = true;
-    
-    EnableWiFi();
 
-    CloseMenu();
-  };
-  
-    
-  void EnableWiFiMenu()
-  {
-    g_bDisableWifiConnect = false;
-    
-    EnableWiFi();
-
-    CloseMenu();
-  };
-  
-  void DisableWiFiMenu()
-  {
-    DisableWiFi();
-
-    CloseMenu();
-  };
 
 
 
   void DisableWiFi()
   {
-    LoRaWiFiApCfg.bWiFiEnabled = false;
+    Serial.println(F("Disable WiFi:"));
+
+    //stop webserver
+    StopWebServers();
+
+    while(g_bWebTaskRunning == true)
+    {
+      delay(100);
+    };
+
+    //stop TCP Server
+    if(g_pTCPServer != NULL)
+    {
+      g_pTaskHandler->removeTask(g_pTCPServer->getTaskID());
+      delete g_pTCPServer;
+
+      g_pTCPServer = NULL;
+    };
+
+    Serial.println(F("Disable WiFi:"));
     
+    //stop dns responder
+    g_dnsServer.stop();
+    
+    LoRaWiFiApCfg.bWiFiEnabled = false;
+
+    g_nWiFiConnects  = 0;
+    g_bWiFiConnected = false;
+
+    Serial.println(F("Disable WiFi:"));
+
+    WiFi.disconnect();
     WiFi.mode(WIFI_OFF);
   };
 
 
   //this function will enable and setup WiFi
-  void EnableWiFi()
+  void EnableWiFi()  
   {
     //variables
     ///////////
     IPAddress IP;
 
-    g_nWiFiConnects  = 0;
-    g_bWiFiConnected = false;
-    
-    WiFi.mode(WIFI_OFF);
-
-    LoRaWiFiApCfg.bWiFiEnabled = true;
-
-    Serial.println(F("Enable WiFi:"));
-
-    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+    if(LoRaWiFiApCfg.bWiFiEnabled == false)
     {
-      WiFi.mode(WIFI_AP_STA);
-    }
-    else 
-    {
-      WiFi.mode(WIFI_AP);  
-    };
+      g_nWiFiConnects  = 0;
+      g_bWiFiConnected = false;
 
-    WiFi.hostname("loralink");
-
-
-    // Remove the password parameter, if you want the AP (Access Point) to be open
-    if(strlen(LoRaWiFiApCfg.szWLANPWD) > 0) 
-    {
-      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, LoRaWiFiApCfg.szWLANPWD, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
-    }
-    else 
-    {
-      WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, NULL, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
-    };
-    
-    if(IP.fromString(LoRaWiFiApCfg.szDevIP)) 
-    {
-      IPAddress NMask(255, 255, 255, 0);
-      
-      WiFi.softAPConfig(IP, IP, NMask);
-    }; 
-
-
-    //check for WiFi Connect
-    if((strlen(LoRaWiFiCfg.szWLANSSID) > 0) && (g_bDisableWifiConnect == false))
-    {
-      Serial.print(F("Connect to WiFi: "));
-      Serial.println(LoRaWiFiCfg.szWLANSSID);
-
-      WiFi.onEvent(WiFiStationConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
-      WiFi.onEvent(WiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-      WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-      
-      if(strlen(LoRaWiFiCfg.szWLANPWD) > 0)
+      LoRaWiFiApCfg.bWiFiEnabled = true;
+  
+      Serial.println(F("Enable WiFi:"));
+  
+      if((strlen(LoRaWiFiCfg.szWLANSSID) > 0) || (g_bDisableWifiConnect == false))
       {
-        WiFi.begin(LoRaWiFiCfg.szWLANSSID, LoRaWiFiCfg.szWLANPWD);
+        WiFi.mode(WIFI_AP_STA);
       }
-      else
+      else 
       {
-        WiFi.begin(LoRaWiFiCfg.szWLANSSID);
+        WiFi.mode(WIFI_AP);  
       };
+  
+      
+      // Remove the password parameter, if you want the AP (Access Point) to be open
+      if(strlen(LoRaWiFiApCfg.szWLANPWD) > 0) 
+      {
+        WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, LoRaWiFiApCfg.szWLANPWD, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
+      }
+      else 
+      {
+        WiFi.softAP(LoRaWiFiApCfg.szWLANSSID, NULL, LoRaWiFiApCfg.nChannel, (LoRaWiFiApCfg.bHideNetwork == true ? 1 : 0));
+      };
+      
+      if(IP.fromString(LoRaWiFiApCfg.szDevIP)) 
+      {
+        IPAddress NMask(255, 255, 255, 0);
+        
+        WiFi.softAPConfig(IP, IP, NMask);
+      }; 
+  
+  
+      //check for WiFi Connect
+      if((strlen(LoRaWiFiCfg.szWLANSSID) > 0) && (g_bDisableWifiConnect == false))
+      {
+        Serial.print(F("Connect to WiFi: "));
+        Serial.println(LoRaWiFiCfg.szWLANSSID);
+  
+        if(strlen(LoRaWiFiCfg.szWLANPWD) > 0)
+        {
+          WiFi.begin(LoRaWiFiCfg.szWLANSSID, LoRaWiFiCfg.szWLANPWD);
+        }
+        else
+        {
+          WiFi.begin(LoRaWiFiCfg.szWLANSSID);
+        };
+      };
+  
+      WiFi.hostname("loralink");
+      WiFi.setTxPower(static_cast<wifi_power_t>(LoRaWiFiApCfg.nPower));
+
+
+      //setup dns responder
+      g_dnsServer.start(53, "*", IP);
+
+
+      if(IpLinkConfig.bServerEnabled == true)
+      {
+        g_pTCPServer = new CTCPServer(IpLinkConfig.wServerPort, onIpClientConnect);
+        g_pTCPServer->setInterval(0);
+  
+        g_pTaskHandler->addTask(g_pTCPServer);
+      };
+
+
+      if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+      {
+        //check for dyndns config
+        if(strlen(DynDNSConfig.szProvider) > 0)
+        {
+          EasyDDNS.service(DynDNSConfig.szProvider);
+    
+          if(DynDNSConfig.bAuthWithUser == false)
+          {
+            EasyDDNS.client(DynDNSConfig.szDomain, DynDNSConfig.szUser); // Enter your DDNS Domain & Token
+          }
+          else
+          {
+            EasyDDNS.client(DynDNSConfig.szDomain, DynDNSConfig.szUser, DynDNSConfig.szPassword);
+          };
+    
+          // Get Notified when your IP changes
+          EasyDDNS.onUpdate([&](const char* oldIP, const char* newIP) {
+            Serial.print("EasyDDNS - IP Change Detected: ");
+            Serial.println(newIP);
+          });
+    
+          ResetWatchDog();
+        };
+      };
+
+      //Setup internal webserver
+      StartWebservers(ApiCallbackHandler);
+  
+      //create a task to handle the web requests
+      xTaskCreatePinnedToCore(WebServerTask, "WebServerTask", LORALINK_STACKSIZE_WEBSERVER, NULL, 1, &g_Core1TaskHandle2, 1);
     };
   };
   
@@ -286,11 +338,11 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
    */
   void WebServerTask(void *pParam)
   {
-    #ifdef WEBAPIDEBUG
-      Serial.println(F("Webserver Task started"));
-    #endif
+    g_bWebTaskRunning = true;
     
-    while(true)
+    Serial.println(F("Webserver Task started"));
+    
+    while(WebserverStarted() == true)
     {
       LLSystemState.lMemFreeWebServerTask     = uxTaskGetStackHighWaterMark(NULL);
 
@@ -302,6 +354,12 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
 
       ResetWatchDog();  
     };
+
+    Serial.println(F("Webserver Task stopped"));
+
+    g_bWebTaskRunning = false;
+
+    vTaskDelete(g_Core1TaskHandle2);
   };
 
 
@@ -1364,9 +1422,7 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
         );
         
       #else
-        sprintf_P(szResp + strlen(szResp), 
-          PSTR(", \"bHaveGPS\": false}");
-        );
+        sprintf_P(szResp + strlen(szResp), PSTR(", \"bHaveGPS\": false}"));
       #endif
       
       sendStringResponse(resp, 200, (char*)(String(F("application/json"))).c_str(), szResp);
@@ -1808,8 +1864,8 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
           {
             //variables
             ///////////
-            DynamicJsonDocument doc2(sizeof(sLoRaWiFiCfg) + 100);
-            char      szOutput[sizeof(sLoRaWiFiCfg) + 100];
+            DynamicJsonDocument doc2(sizeof(sLoRaWiFiCfg) + 1500);
+            char      szOutput[sizeof(sLoRaWiFiCfg) + 1500];
             int       nLength;
       
             DeSerializeWiFiConfig(doc, &LoRaWiFiCfg); 
@@ -1860,8 +1916,8 @@ CWSFKissParser         *g_pLoRaKissParser       = NULL;
           {
             //variables
             ///////////
-            DynamicJsonDocument doc2(sizeof(sLoRaWiFiCfg) + 100);
-            char      szOutput[sizeof(sLoRaWiFiCfg) + 100];
+            DynamicJsonDocument doc2(sizeof(sLoRaWiFiCfg) + 1500);
+            char      szOutput[sizeof(sLoRaWiFiCfg) + 1500];
             int       nLength;
       
             DeSerializeWiFiConfig(doc, &LoRaWiFiApCfg);
@@ -3281,6 +3337,10 @@ void switchToAx25()
   if(g_bAx25Mode == false)
   {
     g_bAx25Mode = true;
+ 
+    #if LORALINK_HARDWARE_WIFI == 1
+      DisableWiFi();
+    #endif
 
     //delete all objects running in tasks, which
     //interfere with the packet radio mode
@@ -3289,6 +3349,13 @@ void switchToAx25()
     
     delete g_pSkyNetConnection;
     g_pSkyNetConnection = NULL;
+
+    //delete task handler
+    delete g_pTaskHandler;
+    g_pTaskHandler = NULL;
+
+
+    g_pModemTask->setHandler(NULL);
 
     //create the global kiss parser
     g_pLoRaKissParser = new CWSFKissParser(OnLoRaKissPacketComplete);
@@ -3305,6 +3372,7 @@ void switchToAx25()
         if(pModemData != NULL)
         {      
           g_pModemMessages->removeItem(pModemData);
+          g_pModemMessages->itterateStart();
 
           delete pModemData->pData;
           delete pModemData;
@@ -3317,10 +3385,20 @@ void switchToAx25()
     LLSystemState.lOutstandingMsgs  = 0;
   };
 
-  CloseMenu();
+  #if LORALINK_HARDWARE_STATUS_LED_PIN != -1
+    g_ledblink.SetBlinking(LORALINK_HARDWARE_STATUS_LED_PIN, false);
+  #endif
+
+  #if LORALINK_HARDWARE_OLED == 1
+    CloseMenu();
+  #endif
 };
 
 
+
+
+
+  
 
 
 void setup() 
@@ -3338,20 +3416,30 @@ void setup()
   Serial.print(F("Init LoRa-Link on "));
   Serial.println(LORALINK_HARDWARE_NAME);
 
-  pinMode(USER_BUTTON, INPUT);
+
+
+  #ifdef LORALINK_HARDWARE_TDECK
+  
+    pinMode(TDECK_PERI_POWERON, OUTPUT);
+    digitalWrite(TDECK_PERI_POWERON, HIGH);
+    
+  #endif
+
+  #if USER_BUTTON != -1
+    pinMode(USER_BUTTON, INPUT);
+  #endif
 
   g_lReconnectToServerTimeout = 0;
   g_bReconnectToServer        = false;
 
-  #if LORALINK_HARDWARE_BATSENSE == 1
-    Serial.println(F("Init ADC (RDiv)"));
-    adc_init();
-  #endif
+
 
   //set status LED, which is always present 
   //even if configurred as int led
-  pinMode(LORALINK_HARDWARE_STATUS_LED_PIN, OUTPUT);
-  g_ledblink.AddLed(LORALINK_HARDWARE_STATUS_LED_PIN, 100, 900);
+  #if LORALINK_HARDWARE_STATUS_LED_PIN != -1
+    pinMode(LORALINK_HARDWARE_STATUS_LED_PIN, OUTPUT);
+    g_ledblink.AddLed(LORALINK_HARDWARE_STATUS_LED_PIN, 100, 900);
+  #endif
 
   #if LORALINK_HARDWARE_LED == 1
     pinMode(LORALINK_HARDWARE_TX_LED_PIN, OUTPUT);
@@ -3530,8 +3618,6 @@ void setup()
   #endif
 
   
-
-
 
   #ifdef LORALINK_HARDWARE_TBEAM
 
@@ -3776,60 +3862,18 @@ void setup()
       g_display.display();
     #endif
 
-    EnableWiFi();
-    
+    WiFi.onEvent(WiFiStationConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+    WiFi.onEvent(WiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
-    if(strlen(LoRaWiFiCfg.szWLANSSID) > 0)
+    if(LoRaWiFiApCfg.bDisabled == false)
     {
-      //check for dyndns config
-      if(strlen(DynDNSConfig.szProvider) > 0)
-      {
-        EasyDDNS.service(DynDNSConfig.szProvider);
-  
-        if(DynDNSConfig.bAuthWithUser == false)
-        {
-          EasyDDNS.client(DynDNSConfig.szDomain, DynDNSConfig.szUser); // Enter your DDNS Domain & Token
-        }
-        else
-        {
-          EasyDDNS.client(DynDNSConfig.szDomain, DynDNSConfig.szUser, DynDNSConfig.szPassword);
-        };
-  
-        // Get Notified when your IP changes
-        EasyDDNS.onUpdate([&](const char* oldIP, const char* newIP) {
-          Serial.print("EasyDDNS - IP Change Detected: ");
-          Serial.println(newIP);
-        });
-  
-        ResetWatchDog();
-      };
-
-
-      if(IpLinkConfig.bServerEnabled == true)
-      {
-        g_pTCPServer = new CTCPServer(IpLinkConfig.wServerPort, onIpClientConnect);
-        g_pTCPServer->setInterval(0);
-  
-        g_pTaskHandler->addTask(g_pTCPServer);
-      };
-    };
+      EnableWiFi();
+    };    
     
-    //setup dns responder
-    if(IP.fromString(LoRaWiFiApCfg.szDevIP)) 
-    {
-      g_dnsServer.start(53, "*", IP);
-    };
-
-    Serial.println(F("Start webserver..."));
-
     //init web event handler
+    //don't care if wifi active or not!
     g_pWebEvent = new CWebEvent();
-
-    //Setup internal webserver
-    StartWebservers(ApiCallbackHandler);
-
-    //create a task to handle the web requests
-    xTaskCreatePinnedToCore(WebServerTask, "WebServerTask", LORALINK_STACKSIZE_WEBSERVER, NULL, 1, &g_Core1TaskHandle2, 1);
   #endif
 
 
@@ -3904,7 +3948,9 @@ void setup()
   #endif
 
   //a task responsible for let the leds blink
-  xTaskCreatePinnedToCore(BlinkTask, "BlinkTask", LORALINK_STACKSIZE_BLINK, NULL, 1, &g_Core0TaskHandle1, 1);
+  #if LORALINK_HARDWARE_LED == 1 || LORALINK_HARDWARE_STATUS_LED_PIN != -1
+    xTaskCreatePinnedToCore(BlinkTask, "BlinkTask", LORALINK_STACKSIZE_BLINK, NULL, 1, &g_Core0TaskHandle1, 1);
+  #endif
 
   //if an OLED display is attached, create a task, to show a nice info screen
   #if LORALINK_HARDWARE_OLED == 1
@@ -4139,73 +4185,23 @@ void OnSerialKissPacketComplete(char *pszData, int nLen)
 {
   //variables
   ///////////
-  char *pszTemp       = new char[MAX_KISS_PACKET_LEN + 1];
-  int  nPacketLength  = CWSFKissParser::getKissPacket(pszData, nLen, pszTemp); 
-  int  nPos           = 0;
-  int  nLength        = 0;
-  long lTimeout       = millis() + 10000;
-  int  nModemState;  
+  _sModemData *pModemData = new _sModemData;
+
+  pModemData->pData       = new byte[MAX_KISS_PACKET_LEN + 1];
+  memcpy(pModemData->pData, (byte*)pszData, nLen);
+  pModemData->nDataLength = nLen;
+
+  g_pModemMessages->addItem(pModemData);
 
   LLSystemState.lBlocksToTransfer += 1;
-  
-  do
-  {
-    if((nPacketLength - nPos) > (MAX_DATA_LEN - 5))
-    {
-      nLength = (MAX_DATA_LEN - 5);
-    }
-    else
-    {
-      nLength = nPacketLength - nPos;
-    };
-
-
-    //wait till everything is received in rx
-    //state or transmitted during tx state and 
-    //if an actual packet is complete
-    do
-    {
-      nModemState = g_pModemTask->GetModemState();
-
-      if(nModemState == MODEM_STATE_RX)
-      {
-        lTimeout = millis() + 10000;
-      };
-      
-      ResetWatchDog();
-      delay(10);
-    } while(((nModemState != MODEM_STATE_IDLE) || (g_pLoRaKissParser->packetIncomplete() == true)) && (millis() < lTimeout));
-
-    //invalidate the packet, if it timed out
-    if(millis() >= lTimeout)
-    {
-      g_pLoRaKissParser->invalidatePacket();
-    };
-    
-    g_pModemTask->sendData((byte*)pszTemp + nPos, nLength);
-
-    nPos += nLength;
-    
-  } while(nPos < nPacketLength);
-
-  delay(ModemConfig.lMessageTransmissionInterval);
-  
-  delete pszTemp;
 };
 
 
 void OnLoRaKissPacketComplete(char *pszData, int nLen)
 {
-  //variables
-  ///////////
-  char *pszTemp       = new char[MAX_KISS_PACKET_LEN + 1];
-  int  nPacketLength  = CWSFKissParser::getKissPacket(pszData, nLen, pszTemp); 
-
-  Serial.write(pszTemp, nPacketLength);
+  Serial.write(pszData, nLen);
 
   LLSystemState.lOutstandingMsgs += 1;
-
-  delete pszTemp;
 };
 
 
@@ -4277,46 +4273,128 @@ void OnModemStateChanged(int nState)
 /**
  * this task handles the received and queued modem data. processing can take some time,
  * so I had to seperate it, otherwise it would break reception...
+ * 
+ * When the device operates as ax25 modem, this task will be used to send the messages
+ * which are received over the serial connection.
  */
 void ModemDataTask(void *pParam)
 {
   //variables
   ///////////
-  _sModemData              *pModemData;
-
+  _sModemData *pModemData;
+  int         nPos           = 0;
+  int         nLength        = 0;
+  long        lTimeout;
+  int         nModemState;  
+  
   esp_task_wdt_init(6000, false);
   
   while(true)
   {
-    LLSystemState.lMemFreeModemDataTask = uxTaskGetStackHighWaterMark(NULL);
-
-    if(g_pModemMessages->getItemCount() > 0)
-    { 
-      g_pModemMessages->itterateStart();
-    
-      do 
-      {
-        pModemData = (_sModemData*)g_pModemMessages->getNextItem();
-    
-        if(pModemData != NULL)
-        {
-          pModemData->pHandler->handleConnData(pModemData->pData, pModemData->nDataLength, pModemData->nRSSI, pModemData->fPacketSNR);
-          
-          g_pModemMessages->removeItem(pModemData);
+    if(g_bAx25Mode == false)
+    {
+      LLSystemState.lMemFreeModemDataTask = uxTaskGetStackHighWaterMark(NULL);
   
-          delete pModemData->pData;
-          delete pModemData;
+      if(g_pModemMessages->getItemCount() > 0)
+      { 
+        g_pModemMessages->itterateStart();
+      
+        do 
+        {
+          pModemData = (_sModemData*)g_pModemMessages->getNextItem();
+      
+          if(pModemData != NULL)
+          {
+            pModemData->pHandler->handleConnData(pModemData->pData, pModemData->nDataLength, pModemData->nRSSI, pModemData->fPacketSNR);
+            
+            g_pModemMessages->removeItem(pModemData);
+    
+            delete pModemData->pData;
+            delete pModemData;
+    
+            ResetWatchDog();
+    
+            LLSystemState.lMemFreeModemDataTask = uxTaskGetStackHighWaterMark(NULL);
+          };
   
           ResetWatchDog();
   
           LLSystemState.lMemFreeModemDataTask = uxTaskGetStackHighWaterMark(NULL);
-        };
-
-        ResetWatchDog();
-
-        LLSystemState.lMemFreeModemDataTask = uxTaskGetStackHighWaterMark(NULL);
+          
+        } while(pModemData != NULL);
+      };
+    }
+    else
+    {
+      if(g_pLoRaKissParser != NULL)
+      {
+        if(g_pModemMessages->getItemCount() > 0)
+        { 
+          g_pModemMessages->itterateStart();
+          
+          pModemData = (_sModemData*)g_pModemMessages->getNextItem();
         
-      } while(pModemData != NULL);
+          if(pModemData != NULL)
+          {
+            nPos = 0;
+              
+            //wait till everything is received in rx
+            //state or transmitted during tx state and 
+            //if an actual packet is complete
+            lTimeout = millis() + 10000;
+            
+            do
+            {
+              nModemState = g_pModemTask->GetModemState();
+  
+              //reset timeout when receiving data
+              if(nModemState == MODEM_STATE_RX)
+              {
+                lTimeout = millis() + 10000;
+              };
+  
+              //invalidate the RX packet, if it timed out
+              if(millis() > lTimeout)
+              {
+                g_pLoRaKissParser->invalidatePacket();
+  
+                break;
+              };
+              
+              ResetWatchDog();
+              delay(100);
+              
+            } while((nModemState != MODEM_STATE_IDLE) || (g_pLoRaKissParser->packetIncomplete() == true));
+  
+            
+            do
+            {
+              if((pModemData->nDataLength - nPos) > (MAX_DATA_LEN - 5))
+              {
+                nLength = (MAX_DATA_LEN - 5);
+              }
+              else
+              {
+                nLength = pModemData->nDataLength - nPos;
+              };
+              
+              g_pModemTask->sendData(pModemData->pData + nPos, nLength);
+            
+              nPos += nLength;
+  
+              ResetWatchDog();
+              
+            } while(nPos < pModemData->nDataLength);
+            
+            g_pModemMessages->removeItem(pModemData);
+    
+            delete pModemData->pData;
+            delete pModemData;
+  
+            delay(ModemConfig.lMessageTransmissionInterval);
+          }; 
+        };
+      };
     };
     
     ResetWatchDog();
@@ -4521,6 +4599,29 @@ void ModemDataTask(void *pParam)
   
 
 #if LORALINK_HARDWARE_OLED == 1
+
+  void DisplayBrightness0Menu()
+  {
+    g_display.ssd1306_command(SSD1306_DISPLAYOFF);
+    g_pOneBtnMnu->closeMenu();
+  };
+  
+  
+  void DisplayBrightness100Menu()
+  {
+    g_display.ssd1306_command(SSD1306_DISPLAYON);
+    g_pOneBtnMnu->closeMenu();
+  };
+  
+  
+  void CloseMenu()
+  {
+    g_pOneBtnMnu->closeMenu();
+  
+    g_display.clearDisplay();
+    g_display.display();
+  };
+
 
   void DisplayTask(void *pParam)
   {
@@ -4740,9 +4841,16 @@ void ModemDataTask(void *pParam)
               }
               else
               {
-                sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: OFF\0"), LLSystemState.lOutstandingMsgs);
-              };
-         
+                if(LoRaWiFiApCfg.bDisabled == false)
+                {
+                  sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: OFF\0"), LLSystemState.lOutstandingMsgs);
+                }
+                else
+                {
+                  sprintf_P(szText, PSTR("Proto MSGS: %i\nWiFi: Disabled\0"), LLSystemState.lOutstandingMsgs);
+                };
+              }; 
+              
               w = 0; h = 13;
               g_display.setCursor(w, h);
               
@@ -4819,7 +4927,7 @@ void ModemDataTask(void *pParam)
           g_display.drawLine(w, h, 128, h, SSD1306_WHITE);
           //end of top info
 
-          sprintf_P(szText, PSTR("Packets TX: %i\nPackets RX: %i\0"), LLSystemState.lBlocksToTransfer, LLSystemState.lOutstandingMsgs);
+          sprintf_P(szText, PSTR("Packets TX: %i\nTX Queue: %i\nPackets RX: %i\0"), LLSystemState.lBlocksToTransfer, g_pModemMessages->getItemCount(), LLSystemState.lOutstandingMsgs);
               
           w = 0; h = 13;
           g_display.setCursor(w, h);
@@ -4892,8 +5000,10 @@ void BlinkTask(void *pParam)
     if(lCheckTimer < millis())
     {
       lCheckTimer                         = millis() + 1000;
-      
-      g_ledblink.SetBlinking(LORALINK_HARDWARE_STATUS_LED_PIN, LLSystemState.bConnected);
+
+      #if LORALINK_HARDWARE_STATUS_LED_PIN != -1
+        g_ledblink.SetBlinking(LORALINK_HARDWARE_STATUS_LED_PIN, LLSystemState.bConnected);
+      #endif
     };
     
     ResetWatchDog();
@@ -5591,29 +5701,32 @@ void OnSchedule(uint32_t dwScheduleID, int nScheduleType, uint32_t dwLastExec, i
         //variables
         ///////////
         CTCPClient *pNewClient;
-        
-        Serial.println(F("[OnSched] Webserver check:"));
-        
-        pNewClient = new CTCPClient(LoRaWiFiApCfg.szDevIP, 80);
-  
-        if(pNewClient->isConnected() == false)
-        {
-          if(++g_nWebserverCheck > 2)
-          {
-            Serial.println(F("[OnSched] ERROR: Internal server does not repond, assume dev in error condition - reboot"));
-            delay(10000);
-    
-            ESP.restart();
-          };
-        }
-        else
-        {
-          Serial.println(F("[OnSched] Webserver check OK"));
 
-          g_nWebserverCheck = 0;
-        };
+        if(LoRaWiFiApCfg.bWiFiEnabled == true)
+        {
+          Serial.println(F("[OnSched] Webserver check:"));
+          
+          pNewClient = new CTCPClient(LoRaWiFiApCfg.szDevIP, 80);
+    
+          if(pNewClient->isConnected() == false)
+          {
+            if(++g_nWebserverCheck > 2)
+            {
+              Serial.println(F("[OnSched] ERROR: Internal server does not repond, assume dev in error condition - reboot"));
+              delay(10000);
+      
+              ESP.restart();
+            };
+          }
+          else
+          {
+            Serial.println(F("[OnSched] Webserver check OK"));
   
-        delete pNewClient;
+            g_nWebserverCheck = 0;
+          };
+    
+          delete pNewClient;
+        };
       };
       break;
 
@@ -5894,95 +6007,119 @@ void OnLoRaLinkProtocolData(void *pProtocolMsg, byte *pData, int nDataLen)
 
 
 
-void DisplayBrightness0Menu()
-{
-  g_display.ssd1306_command(SSD1306_DISPLAYOFF);
-  g_pOneBtnMnu->closeMenu();
-};
 
+#if LORALINK_HARDWARE_WIFI == 1
 
-void DisplayBrightness100Menu()
-{
-  g_display.ssd1306_command(SSD1306_DISPLAYON);
-  g_pOneBtnMnu->closeMenu();
-};
-
-
-void CloseMenu()
-{
-  g_pOneBtnMnu->closeMenu();
-
-  g_display.clearDisplay();
-  g_display.display();
-};
-
-
-
-//callback for menu
-void EnableEmergencyTxMenu()
-{
-  EnablePositionTransmission(GPS_POSITION_TYPE_EMERGENCY);
-
-  g_pOneBtnMnu->closeMenu();
-};
-
-
-void EnablePositionTxMenu()
-{
-  EnablePositionTransmission(GPS_POSITION_TYPE_NORMAL);
-
-  g_pOneBtnMnu->closeMenu();
-};
-
-
-void DisablePositionTxMenu()
-{
-  DisablePositionTransmission();
-
-  g_pOneBtnMnu->closeMenu();
-};
-
-//this function removes the task from the scheduler
-void DisablePositionTransmission()
-{
-  //variables
-  ///////////
-  uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
-
-  if(dwTaskID != 0)
+  void DisableWiFiConnect()
   {
-    g_pDbTaskScheduler->removeSchedule(dwTaskID, true);
+    g_bDisableWifiConnect = true;
+
+    WiFi.disconnect();
+
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif
   };
-};
-
-
-//this function adds or updates a running task to send the GPS
-//position.
-void EnablePositionTransmission(int nType)
-{
-  //variables
-  ///////////
-  uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
-  sDBTaskQueryUser  task;  
-  byte              bData[200];
-
-  task.dwDeviceID     = 0; //all
-  task.dwUserToInform = 0; //all
-  task.dwContactID    = nType;
-  task.dwReleaseTask  = 0;
-
-  memset(bData, 0, sizeof(bData));
-  memcpy(&bData, (void*)&task, sizeof(sDBTaskQueryUser));
-
-  g_bLocationTrackingActive = true;
-  g_nLocationTrackingType   = task.dwContactID; //used as type
-
-  if(dwTaskID == 0)
-  {    
-    g_pDbTaskScheduler->addSchedule(DBTASK_SEND_POSITION, LORALINK_POSITION_INTERVAL_SECONDS, 0, (byte*)&bData, true);
-  }
-  else
+  
+    
+  void EnableWiFiMenu()
   {
-    g_pDbTaskScheduler->updateTaskData(dwTaskID, (byte*)&bData, sizeof(sDBTaskQueryUser));
+    g_bDisableWifiConnect = false;
+    
+    EnableWiFi();
+
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif
   };
-};
+  
+  void DisableWiFiMenu()
+  {
+    DisableWiFi();
+
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif
+  };
+#endif
+
+
+
+
+#if LORALINK_HARDWARE_GPS == 1
+
+  //callback for menu
+  void EnableEmergencyTxMenu()
+  {
+    EnablePositionTransmission(GPS_POSITION_TYPE_EMERGENCY);
+  
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif;
+  };
+  
+  
+  void EnablePositionTxMenu()
+  {
+    EnablePositionTransmission(GPS_POSITION_TYPE_NORMAL);
+  
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif;
+  };
+  
+  
+  void DisablePositionTxMenu()
+  {
+    DisablePositionTransmission();
+  
+    #if LORALINK_HARDWARE_OLED == 1
+      CloseMenu();
+    #endif;
+  };
+  
+  //this function removes the task from the scheduler
+  void DisablePositionTransmission()
+  {
+    //variables
+    ///////////
+    uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
+  
+    if(dwTaskID != 0)
+    {
+      g_pDbTaskScheduler->removeSchedule(dwTaskID, true);
+    };
+  };
+  
+  
+  //this function adds or updates a running task to send the GPS
+  //position.
+  void EnablePositionTransmission(int nType)
+  {
+    //variables
+    ///////////
+    uint32_t          dwTaskID = g_pDbTaskScheduler->findTaskByScheduleType(DBTASK_SEND_POSITION);
+    sDBTaskQueryUser  task;  
+    byte              bData[200];
+  
+    task.dwDeviceID     = 0; //all
+    task.dwUserToInform = 0; //all
+    task.dwContactID    = nType;
+    task.dwReleaseTask  = 0;
+  
+    memset(bData, 0, sizeof(bData));
+    memcpy(&bData, (void*)&task, sizeof(sDBTaskQueryUser));
+  
+    g_bLocationTrackingActive = true;
+    g_nLocationTrackingType   = task.dwContactID; //used as type
+  
+    if(dwTaskID == 0)
+    {    
+      g_pDbTaskScheduler->addSchedule(DBTASK_SEND_POSITION, LORALINK_POSITION_INTERVAL_SECONDS, 0, (byte*)&bData, true);
+    }
+    else
+    {
+      g_pDbTaskScheduler->updateTaskData(dwTaskID, (byte*)&bData, sizeof(sDBTaskQueryUser));
+    };
+  };
+#endif

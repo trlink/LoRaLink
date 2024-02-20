@@ -8,10 +8,12 @@ CWSFKissParser::CWSFKissParser(tOnKissPacketComplete OnPacketComplete)
 {
   this->m_pszPacket               = new char[MAX_KISS_PACKET_LEN + 1];
   this->m_nPos                    = 0;
-  this->m_bStart                  = false;
   this->m_bEscape                 = false;
   this->m_cbOnKissPacketComplete  = OnPacketComplete;
+  this->m_bHaveStart              = false;
 };
+
+
 
 CWSFKissParser::~CWSFKissParser()
 {
@@ -31,16 +33,17 @@ bool CWSFKissParser::addData(char cData)
 
 bool CWSFKissParser::packetIncomplete()
 {
-  return (this->m_nPos > 0 ? true : false);
+  return this->m_bHaveStart;
 };
 
 
 void CWSFKissParser::invalidatePacket()
 {
-  this->m_bEscape = false;
-  this->m_bStart  = false;
-  this->m_nPos    = 0;
+  this->m_bEscape     = false;
+  this->m_nPos        = 0;
+  this->m_bHaveStart  = false;
 };
+
 
 bool CWSFKissParser::addData(char *pszData, int nLength)
 {
@@ -50,9 +53,49 @@ bool CWSFKissParser::addData(char *pszData, int nLength)
     {
       case 0xDB: //ESC
       {
+        if(this->m_bHaveStart == true)
+        {
+          if(this->m_bEscape == false)
+          {
+            this->m_bEscape = true;
+          };
+          
+          if(this->m_nPos < MAX_KISS_PACKET_LEN)
+          {
+            this->m_pszPacket[this->m_nPos] = pszData[n];
+            this->m_nPos += 1;
+          };
+        };
+      };
+      break;
+
+      #if KISS_DEBUG == 1
+        case 'z': //FRAME_END
+      #endif
+      
+      case 0xC0: //FRAME_END
+      {
         if(this->m_bEscape == false)
         {
-          this->m_bEscape = true;
+          if(this->m_nPos == 0)
+          {
+            this->m_pszPacket[this->m_nPos] = pszData[n];
+            this->m_nPos                    += 1;
+            this->m_bHaveStart              = true;
+          }
+          else
+          {
+            if(this->m_nPos < MAX_KISS_PACKET_LEN)
+            {
+              this->m_pszPacket[this->m_nPos] = pszData[n];
+              this->m_nPos += 1;
+            };
+
+            this->m_cbOnKissPacketComplete(this->m_pszPacket, this->m_nPos);
+
+            this->m_nPos        = 0;
+            this->m_bHaveStart  = false;
+          };
         }
         else
         {
@@ -66,24 +109,10 @@ bool CWSFKissParser::addData(char *pszData, int nLength)
         };
       };
       break;
-      
-      case 0xC0: //FRAME_END
-      {
-        if(this->m_bEscape == false)
-        {
-          if(this->m_nPos == 0)
-          {
-            this->m_bStart = true;
-          }
-          else
-          {
-            this->m_cbOnKissPacketComplete(this->m_pszPacket, this->m_nPos);
 
-            this->m_nPos   = 0;
-            this->m_bStart = false;
-          };
-        }
-        else
+      default:
+      {
+        if(this->m_bHaveStart == true)
         {
           if(this->m_nPos < MAX_KISS_PACKET_LEN)
           {
@@ -91,16 +120,8 @@ bool CWSFKissParser::addData(char *pszData, int nLength)
             this->m_nPos += 1;
           };
         };
-      };
-      break;
-
-      default:
-      {
-        if(this->m_nPos < MAX_KISS_PACKET_LEN)
-        {
-          this->m_pszPacket[this->m_nPos] = pszData[n];
-          this->m_nPos += 1;
-        };
+        
+        this->m_bEscape = false;
       };
     };
   };
@@ -108,49 +129,3 @@ bool CWSFKissParser::addData(char *pszData, int nLength)
   return true;
 };
     
-
-
-int CWSFKissParser::getKissPacket(char *pszData, int nLength, char *pszPacket)
-{
-  int nPos = 0;
-
-  pszPacket[nPos] = 0xC0;
-  nPos += 1;
-        
-  for(int n = 0; n < nLength; ++n)
-  {
-    switch(pszData[n])
-    {
-      case 0xDB: //ESC
-      {
-        pszPacket[nPos] = 0xDB;
-        nPos += 1;
-        
-        pszPacket[nPos] = pszData[n];
-        nPos += 1;
-      };
-      break;
-      
-      case 0xC0: //FRAME_END
-      {
-        pszPacket[nPos] = 0xDB;
-        nPos += 1;
-        
-        pszPacket[nPos] = pszData[n];
-        nPos += 1;    
-      };
-      break;
-
-      default:
-      {
-        pszPacket[nPos] = pszData[n];
-        nPos += 1;
-      };
-    };
-  };
-
-  pszPacket[nPos] = 0xC0;
-  nPos += 1;
-
-  return nPos;
-};

@@ -6,18 +6,19 @@
 //defines
 /////////
 //#define L1_DEBUG
-#define L1_INFO
-#define RX_TIMEOUT        8000  /*interval in which the CAD has to return RX, otherwise it's idle*/
+//#define L1_INFO
+#define RX_TIMEOUT        3000  /*interval in which the CAD has to return RX, otherwise it's idle*/
 #define MAX_DATA_LEN      255   /*max size of a lora packet*/
 
 
 //modem states
-#define MODEM_STATE_IDLE      1
-#define MODEM_STATE_TX        2
-#define MODEM_STATE_RX        3
-#define MODEM_STATE_ERROR     4
-#define MODEM_STATE_WAIT_TX   5
-#define MODEM_STATE_WAIT_RX   6
+#define MODEM_STATE_IDLE      1   //free 
+#define MODEM_STATE_TX        2   //transmitting
+#define MODEM_STATE_RX        3   //receiving
+#define MODEM_STATE_ERROR     4   //error state
+#define MODEM_STATE_WAIT_TX   5   //waiting after TX
+#define MODEM_STATE_WAIT_RX   6   //wait after RX
+
 
 
 //includes
@@ -87,6 +88,7 @@ class CLoRaModem : public CLoRaLinkDataIF
     long                  m_lLastRx;        //time when the last packet was received/transmitted
     int                   m_nLastState;
     SemaphoreHandle_t     m_mutex;
+    bool                  m_bTransmit;
 
     void UpdateModemState();
 

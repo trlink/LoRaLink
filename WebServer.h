@@ -41,7 +41,8 @@ using namespace httpsserver;
 typedef void(*WebServerOnPostRequest)(void *req, void *res, char *pData, int nDataLength);
 
 void StartWebservers(WebServerOnPostRequest apiHandler);
-
+void StopWebServers();
+bool WebserverStarted();
 void HandleWebserver();
 
 

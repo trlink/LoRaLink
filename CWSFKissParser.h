@@ -2,7 +2,7 @@
 #define __CWSFKISSPARSER__
 
 #define MAX_KISS_PACKET_LEN 2048
-
+#define KISS_DEBUG          1
 
 
 typedef void(*tOnKissPacketComplete)(char *pszData, int nPacketLength); 
@@ -21,15 +21,14 @@ class CWSFKissParser
     bool packetIncomplete();
     void invalidatePacket();
 
-    static int getKissPacket(char *pszData, int nLength, char *pszPacket);
   private:
     //variables
     ///////////
     tOnKissPacketComplete m_cbOnKissPacketComplete;
     int                   m_nPos;
     char                  *m_pszPacket;
-    bool                  m_bStart;
     bool                  m_bEscape;
+    bool                  m_bHaveStart;
 };
 
 

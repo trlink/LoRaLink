@@ -123,6 +123,8 @@ void ReadDeviceConfig()
     LoRaWiFiApCfg.bHideNetwork = false;
     LoRaWiFiApCfg.nChannel = 1;
     LoRaWiFiApCfg.bWiFiEnabled = false;
+    LoRaWiFiApCfg.nPower = 78;
+    LoRaWiFiApCfg.bDisabled = false;
 
     PrepareSerializeWiFiConfig(doc, &LoRaWiFiApCfg);
 
@@ -659,6 +661,24 @@ void DeSerializeWiFiConfig(DynamicJsonDocument &doc, sLoRaWiFiCfg *pWiFiCfg)
   {
     pWiFiCfg->nChannel = 1;
   };  
+
+  if(doc.containsKey(F("bDisabled"))) 
+  {
+    pWiFiCfg->bDisabled = doc[F("bDisabled")];
+  }
+  else
+  {
+    pWiFiCfg->bDisabled = false;
+  };
+
+  if(doc.containsKey(F("power"))) 
+  {
+    pWiFiCfg->nPower = doc[F("power")];
+  }
+  else
+  {
+    pWiFiCfg->nPower = 78;
+  };
 };
 
 
@@ -671,6 +691,8 @@ void PrepareSerializeWiFiConfig(DynamicJsonDocument &doc, sLoRaWiFiCfg *pWiFiCfg
   doc[F("bUseDHCP")] = pWiFiCfg->bUseDHCP;
   doc[F("nChannel")] = pWiFiCfg->nChannel;
   doc[F("bHideNetwork")] = pWiFiCfg->bHideNetwork;
+  doc[F("power")] = pWiFiCfg->nPower;
+  doc[F("bDisabled")] = pWiFiCfg->bDisabled;
 };
 
 

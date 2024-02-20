@@ -211,29 +211,38 @@ int  CLoRaModem::GetModemState()
     if(this->m_bInitOK == true)
     {
       //allways check real receiver state
-      //if not transmitting/receiving
-      if(this->m_nModemState != MODEM_STATE_TX)
-      {
+      //if not transmitting
+      if((this->m_nModemState == MODEM_STATE_IDLE) || (this->m_nModemState == MODEM_STATE_WAIT_TX))
+      {        
         nState = this->m_pLoRaModem->readIrqStatus();
   
-        #ifdef L1_DEBUG
-          Serial.print(F("[Modem] IRQ State: "));
-          Serial.println(nState);
-        #endif
-          
         //check if the modem receives something
         if(((nState & IRQ_CAD_ACTIVITY_DETECTED) == IRQ_CAD_ACTIVITY_DETECTED) || ((nState & IRQ_HEADER_VALID) == IRQ_HEADER_VALID))
         {
-          #ifdef L1_INFO
-              Serial.println(F("[Modem] IRQ state: rx"));
+          #ifdef L1_DEBUG
+            Serial.print(F("[Modem] IRQ State: "));
+            Serial.println(nState);
           #endif
 
-          //set RX state, until receive function is finished
-          //or timeout in form of rx_delay occurs. The library does not
-          //always return from receive() when packet is incomplete...
-          this->m_lLastRx     = millis() + RX_TIMEOUT;
-          this->m_nModemState = MODEM_STATE_RX;
-        };
+          if((nState & IRQ_RX_TX_TIMEOUT) != IRQ_RX_TX_TIMEOUT)
+          {
+            #ifdef L1_INFO
+                Serial.println(F("[Modem] IRQ state: rx"));
+            #endif
+  
+            //set RX state, until receive function is finished
+            //or timeout in form of rx_delay occurs. The library does not
+            //always return from receive() when packet is incomplete...
+            this->m_lLastRx     = millis() + RX_TIMEOUT;
+            this->m_nModemState = MODEM_STATE_RX;
+          }
+          else
+          {
+            //rx timed out, set idle...
+            this->m_nModemState = MODEM_STATE_IDLE;
+            this->m_lLastRx     = 0;
+          };
+        }; 
       };
 
       if(this->m_nModemState != MODEM_STATE_IDLE)
@@ -242,41 +251,14 @@ int  CLoRaModem::GetModemState()
         //a min. delay between transmissions
         if((this->m_lLastRx <= millis()) && (this->m_lLastRx > 0))
         {
-          if(this->m_nModemState == MODEM_STATE_RX)
-          {
-            #ifdef L1_INFO
-                Serial.println(F("[Modem] Rx timed out"));
-            #endif
+          #ifdef L1_INFO
+              Serial.println(F("[Modem] Rx/Tx Delay passed"));
+          #endif
 
-            //set modem idle again, after delay is passed and
-            //the current state is not idle...
-            this->m_nModemState = MODEM_STATE_WAIT_RX;
-            this->m_lLastRx     = random(ModemConfig.lModemRxDelay / 2, ModemConfig.lModemRxDelay);
-          };
-          
-          if(this->m_nModemState == MODEM_STATE_WAIT_RX)
-          {
-            #ifdef L1_INFO
-                Serial.println(F("[Modem] Rx Delay passed"));
-            #endif
-
-            //set modem idle again, after delay is passed and
-            //the current state is not idle...
-            this->m_nModemState = MODEM_STATE_IDLE;
-            this->m_lLastRx     = 0;
-          };
-
-          if(this->m_nModemState == MODEM_STATE_WAIT_TX)
-          {
-            #ifdef L1_INFO
-                Serial.println(F("[Modem] Tx Delay passed"));
-            #endif
-            
-            //set modem idle again, after delay is passed and
-            //the current state is not idle...
-            this->m_nModemState = MODEM_STATE_IDLE;
-            this->m_lLastRx     = 0;
-          };
+          //set modem idle again, after delay is passed and
+          //the current state is not idle...
+          this->m_nModemState = MODEM_STATE_IDLE;
+          this->m_lLastRx     = 0;
         };        
       };
     }
@@ -315,56 +297,64 @@ void CLoRaModem::handleTask()
   //variables
   ///////////
   byte  *pData      = new byte[MAX_DATA_LEN + 1];
-  int   nPos        = 0;
   int   nPacketSize = 0;
   int   nRSSI       = 0;
   float fSNR        = 0;
-  bool  bDiscard    = false;
-
+  
   memset(pData, 0, MAX_DATA_LEN);
 
-  this->GetModemState();
-  
   if(ModemConfig.bDisableLoRaModem == false)
   {
-    //this function blocks for the max amount of time, if it receives something or not...
-    nPacketSize = this->m_pLoRaModem->receive(pData, MAX_DATA_LEN, (long)ModemConfig.nTransmissionReceiveTimeout * 1000, WAIT_RX);
-
-    xSemaphoreTake(this->m_mutex, portMAX_DELAY);
-    
-    //set rx state, if not already done by another 
-    //task. set dynamic rx delay also
-    this->m_lLastRx     = millis() + random(ModemConfig.lModemRxDelay / 2, ModemConfig.lModemRxDelay);
-    this->m_nModemState = MODEM_STATE_WAIT_RX;
-
-    xSemaphoreGive(this->m_mutex);
-    
-    this->UpdateModemState();
-
-    if(nPacketSize > 0) 
-    {   
+    if(this->GetModemState() != MODEM_STATE_TX)
+    {
+      this->m_bTransmit = false;
+   
       #ifdef L1_DEBUG
-        Serial.print(F("[Modem] RX: Pckt Len: "));
-        Serial.println(nPacketSize);
-      #endif
-
-      nRSSI = this->m_pLoRaModem->readPacketRSSI();
-      fSNR  = this->m_pLoRaModem->readPacketSNR();
-      
-      #ifdef L1_INFO
-        Serial.print(F("[Modem] RX: size: "));
-        Serial.print(nPacketSize);
-        Serial.print(F(" RSSI: "));
-        Serial.print(nRSSI);  
-        Serial.print(F(" SNR: "));
-        Serial.println(fSNR);
+        Serial.println(F("[Modem] Start RX"));
       #endif
       
-      ResetWatchDog();
-
-      if(this->m_RxHandler != NULL)
-      {
-        this->m_RxHandler(pData, nPacketSize, nRSSI, this->m_pHandler, fSNR);
+      //this function blocks for the max amount of time, if it receives something or not...
+      nPacketSize = this->m_pLoRaModem->receive(pData, MAX_DATA_LEN, (long)ModemConfig.nTransmissionReceiveTimeout * 1000, WAIT_RX);
+      
+      if(nPacketSize > 0) 
+      {   
+        //check if data was transmitted during this receive call
+        //if true, discard the data, since I often gut the send data 
+        //as received data...
+        if(this->m_bTransmit == false)
+        {
+          xSemaphoreTake(this->m_mutex, portMAX_DELAY);
+        
+          this->m_lLastRx     = 0;
+          this->m_nModemState = MODEM_STATE_IDLE;
+      
+          xSemaphoreGive(this->m_mutex);
+  
+          
+          #ifdef L1_DEBUG
+            Serial.print(F("[Modem] RX: Pckt Len: "));
+            Serial.println(nPacketSize);
+          #endif
+    
+          nRSSI = this->m_pLoRaModem->readPacketRSSI();
+          fSNR  = this->m_pLoRaModem->readPacketSNR();
+          
+          #ifdef L1_INFO
+            Serial.print(F("[Modem] RX: size: "));
+            Serial.print(nPacketSize);
+            Serial.print(F(" RSSI: "));
+            Serial.print(nRSSI);  
+            Serial.print(F(" SNR: "));
+            Serial.println(fSNR);
+          #endif
+          
+          ResetWatchDog();
+    
+          if(this->m_RxHandler != NULL)
+          {
+            this->m_RxHandler(pData, nPacketSize, nRSSI, this->m_pHandler, fSNR);
+          };
+        };
       };
     };
   };
@@ -399,11 +389,10 @@ bool CLoRaModem::ModemSendData(byte *pData, int nSize)
       
       if(this->m_nModemState == MODEM_STATE_IDLE)
       {
+        this->m_bTransmit   = true;
         this->m_lLastRx     = 0;
         this->m_nModemState = MODEM_STATE_TX;
-        
-        this->UpdateModemState();
-        
+               
         nPos = this->m_pLoRaModem->transmit(pData, nSize, ModemConfig.nTransmissionReceiveTimeout * 1000, this->m_nTxPower, WAIT_TX);
         
         if(nPos <= 0)
@@ -426,12 +415,14 @@ bool CLoRaModem::ModemSendData(byte *pData, int nSize)
         
         //set transmit delay, this gives the modem some time
         //to transmit the internal buffer, switch to RX and check for packets...
+        //I also apply some dynamic delay here, so that it should not happen
+        //to often, that modems are transmitting at the same time
         this->m_nModemState = MODEM_STATE_WAIT_TX;
-        this->m_lLastRx     = millis() + ModemConfig.lModemTxDelay;
+        this->m_lLastRx     = millis() + ModemConfig.lModemTxDelay + random(ModemConfig.lModemRxDelay / 2, ModemConfig.lModemRxDelay);
 
         xSemaphoreGive(this->m_mutex);
         
-        this->UpdateModemState();
+        this->GetModemState();
       }
       else
       {
