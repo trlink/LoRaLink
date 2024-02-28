@@ -17,6 +17,8 @@ CWSFFileDB *g_pNodeTable        = NULL;
 CWSFFileDB *g_pShoutOutTable    = NULL;
 CWSFFileDB *g_pDataTable        = NULL;
 CWSFFileDB *g_pDataHeaderTable  = NULL;
+CWSFFileDB *g_pTrackDataTable   = NULL;
+
 
 //user related 
 //////////////
@@ -1020,4 +1022,23 @@ void     limitShoutEntrys(int nLimit)
   };
 
   delete pRecordset;
+};
+
+
+
+
+void    openTrackDataDB() 
+{
+  //variables
+  ///////////
+  char szDatabaseFile[50];
+  
+  if(g_pTrackDataTable == NULL)
+  {
+    memset((void*)&szDatabaseFile, 0, sizeof(szDatabaseFile));
+    sprintf((char*)&szDatabaseFile, TRACKWAYPOINTTABLE_FILE);
+  
+    g_pTrackDataTable = new CWSFFileDB(&LORALINK_DATA_FS, (char*)&szDatabaseFile, (int*)&nTrackWaypointTableDef, TRACKWAYPOINTTABLE_SIZE, true, DBRESERVE_CONTACT_COUNT);
+    g_pTrackDataTable->open();
+  };
 };

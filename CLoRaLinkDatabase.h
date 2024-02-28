@@ -243,6 +243,7 @@ extern CWSFFileDB *g_pNodeTable;
 extern CWSFFileDB *g_pShoutOutTable;
 extern CWSFFileDB *g_pDataTable;
 extern CWSFFileDB *g_pDataHeaderTable;
+extern CWSFFileDB *g_pTrackDataTable;
 
 
 
@@ -297,6 +298,9 @@ int      assembleMessageData(byte *pData, int nMaxLen, uint32_t dwFileID);
 void     limitShoutEntrys(int nLimit);
 
 
+
+//track db functions
+void    openTrackDataDB();
 
 
 

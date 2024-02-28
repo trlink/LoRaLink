@@ -66,7 +66,7 @@ CLoRaModem::CLoRaModem(tOnReceivedModemData onRxD, tOnModemStateChanged onState)
   this->m_lLastRx        = 0;
   this->m_mutex          = xSemaphoreCreateMutex();
   
-  randomSeed(analogRead(0));
+  randomSeed(millis());
 
   //this task is running in a seperate thread
   //even if it supports the task manager IF,
@@ -81,7 +81,9 @@ CLoRaModem::CLoRaModem(tOnReceivedModemData onRxD, tOnModemStateChanged onState)
 
 CLoRaModem::~CLoRaModem()
 {
-  
+  delete this->m_pLoRaModem;
+
+  vSemaphoreDelete(this->m_mutex);
 };
 
 

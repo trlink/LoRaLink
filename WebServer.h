@@ -4,6 +4,7 @@
 
 //includes
 //////////
+#include "HardwareConfig.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
@@ -32,10 +33,10 @@ using namespace httpsserver;
 //the esp32 v3 has a lot more memory...
 #ifdef LORALINK_HARDWARE_ESP32V3
   #define MAX_WEBSERVER_CONNECTIONS     10
-  #define MAX_FILE_RESP_BUFF_SIZE       1024
+  #define MAX_FILE_RESP_BUFF_SIZE       513
 #else
   #define MAX_WEBSERVER_CONNECTIONS     5
-  #define MAX_FILE_RESP_BUFF_SIZE       512
+  #define MAX_FILE_RESP_BUFF_SIZE       257
 #endif
 
 typedef void(*WebServerOnPostRequest)(void *req, void *res, char *pData, int nDataLength);

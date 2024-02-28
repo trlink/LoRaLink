@@ -131,7 +131,10 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
   } 
   else 
   {
-    //Serial.printf("Unknown POST Content-Type: %s\n", contentType.c_str());
+    #ifdef WEBSERVERDEBUG
+      Serial.printf("Unknown POST Content-Type: %s\n", contentType.c_str());
+    #endif
+    
     return;
   };
 
@@ -148,6 +151,11 @@ void handleUpload(HTTPRequest * req, HTTPResponse * res)
     // The mime type (It is determined by the client. So do not trust this value and blindly start
     //   parsing files only if the type matches)
     name = parser->getFieldName();
+
+    #ifdef WEBSERVERDEBUG
+      // We log all three values, so that you can observe the upload on the serial monitor:
+      Serial.printf("handleFormUpload: field name='%s'\n", name.c_str());
+    #endif
     
     // Double check that it is what we expect
     if(name == "file") 
@@ -254,7 +262,7 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
   strFile.replace("%20", " ");
   
   #ifdef WEBSERVERDEBUG
-    Serial.print(F("Static file handler: "));
+    Serial.print(F("--> Static file handler: "));
     Serial.println((char*)strFile.c_str());
   #endif
 
@@ -271,19 +279,24 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
         
         do
         {
+          #ifdef WEBSERVERDEBUGX 
+            Serial.print(F("Static file handler: read: "));
+            Serial.println(nLen);
+          #endif
+          
           memset(pData, 0, MAX_FILE_RESP_BUFF_SIZE);
           nLen = file.read(pData, MAX_FILE_RESP_BUFF_SIZE - 1);
 
           if(nLen > 0)
           {
+            #ifdef WEBSERVERDEBUGX 
+              Serial.print(F("Static file handler: send: "));
+              Serial.println(nLen);
+            #endif
+            
             res->write(pData, nLen);
           };
   
-          #ifdef WEBSERVERDEBUGX 
-            Serial.print(F("Static file handler: send: "));
-            Serial.println(nLen);
-          #endif
-          
           ResetWatchDog();
         } while(nLen == MAX_FILE_RESP_BUFF_SIZE - 1);
     
@@ -307,6 +320,11 @@ void handleFile(HTTPRequest * req, HTTPResponse * res)
   };
 
   delete pData;
+
+  #ifdef WEBSERVERDEBUG
+    Serial.print(F("<-- Static file handler: "));
+    Serial.println((char*)strFile.c_str());
+  #endif
 };
 
 

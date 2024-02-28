@@ -44,7 +44,6 @@ var g_bRecordTrack    = false;      //true if the dev is recording a track
 var g_bWaitingEvent   = false;      //true if timer event is running
 var g_lLastEmergeID   = 0;          //id of the sending dev, when multiple devs are sending, the dialog will be opened again
 var g_bEmergencyConf  = false;      //received emergency pos confirmed
-var g_strMapView      = "map";      //can be map or sat
 var g_bOverwriteTiles = false;      //if true, tiles will be downloaded without check if exist (yep, something stupid happens...)
 
 
@@ -594,10 +593,38 @@ function resizeWindow() {
  * is conneted to the internet, it uses the online source and enables tile downloading.
  * when the device is offline, it uses the existing tiles from the device...
  * 
- * @param {type} strMapType can be map or sat
  * @returns {undefined}
  */
-function showMapView(strMapType) {
+async function showMapView() {
+    //variables
+    ///////////
+    var osm = null;
+    var sat = null;
+    var seaMark = null;
+    var sea = null;
+    var poiGroup = null;
+    var devGroup = null;
+    var aDevices = [];
+        
+        
+    await loadPoisCreateMarker();
+        
+    poiGroup = L.layerGroup(g_aPois);
+    
+    
+    
+    loadKnownDevices(true, true);
+    
+    for (var key in g_pNodeMarkers) {
+       aDevices.push(g_pNodeMarkers[key].value.Marker);
+    };
+    
+    if(g_pMarkerMe !== null) {
+        aDevices.push(g_pMarkerMe);
+    };
+    
+    devGroup = L.layerGroup(aDevices);
+    
     
     toggleMessageView(true);
     
@@ -607,63 +634,58 @@ function showMapView(strMapType) {
     $("#divMapContainer").html("<div id=\"map\"></div>");
     $("#divMapContainer").show();
     
-    //clear downloader & check, 
-    //when the map type changes
-    g_aTileCheck = [];
-    g_aTileDownloader = [];
     g_pMap = null;
     
-    g_strMapView = strMapType;
     
-
     if(g_bOnlineTiles === true) {
 
         console.log("Show online data");
         g_bOnlineTiles = true;
-
-        if(g_bGpsValid === true) {
-            // Create the map
-            g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
-        }
-        else {
-            // Create the map
-            g_pMap = L.map('map').setView([51, 6], 4);
-        };
-
-        if(strMapType === "map") {
-            // Set up the OSM layer
-            L.tileLayer(
-            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-            ).addTo(g_pMap);
-        }
-        else {
-            // Set up the sat layer
-            L.tileLayer(
-                'http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                subdomains:['mt0','mt1','mt2','mt3']}
-            ).addTo(g_pMap);
-        };
+        
+        //layers
+        osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+        sat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3']});
+        seaMark = L.tileLayer('https://t1.openseamap.org/seamark/{z}/{x}/{y}.png');
     }
     else {
         console.log("Show offline data");
         g_bOnlineTiles = false;
 
-        if(g_bGpsValid === true) {
-            // Create the map
-            g_pMap = L.map('map').setView([g_fLocalLat, g_fLocalLon], 4);
-        }
-        else {
-            // Create the map
-            g_pMap = L.map('map').setView([51, 6], 4);
-        };
-
         // Set up the OSM layer
-        L.tileLayer(
-        '/' + (g_strMapView === "map" ? "tiles" : "tiles_sat") + '/{z}/{x}/{y}.png'
-        ).addTo(g_pMap);
+        osm = L.tileLayer('/tiles/{z}/{x}/{y}.png');
+        sat = L.tileLayer('/tiles_sat/{z}/{x}/{y}.png');
+        seaMark = L.tileLayer('/tiles_sea/{z}/{x}/{y}.png');
     };
+    
+    sea = L.layerGroup([osm, seaMark]);
+    
+    
+    if(g_bGpsValid === true) {
+        // Create the map
+        g_pMap = L.map('map', {
+            center: [g_fLocalLat, g_fLocalLon],
+            zoom: 4,
+            layers: [osm, poiGroup, devGroup]
+        });
+    }
+    else {
+        // Create the map
+        g_pMap = L.map('map', {
+            center: [51, 6],
+            zoom: 4,
+            layers: [osm, poiGroup, devGroup]
+        });
+    };
+    
+    var baseMaps = {
+        "OpenStreetMap": osm,
+        "OpenSeaMap": sea,
+        "Google Satellite": sat
+    };
+    
+    var poiOverlay = {"Show POI's": poiGroup, "Show device's": devGroup};
 
+    var layerControl = L.control.layers(baseMaps, poiOverlay).addTo(g_pMap);
 
     //create back btn
     var btnMapBack = L.control({position: 'topright'});
@@ -695,15 +717,6 @@ function showMapView(strMapType) {
 
 
 
-    //show device labels
-    loadKnownDevices(true, true);
-
-
-    //show pois on map
-    if($("#chkShowPOI").prop('checked') === true) {
-        addPoisOnMap();
-    };
-
     //add on click handler which adds the last clicked coordinates to the 
     //manage poi dialog
     g_pMap.on('click', function(e){
@@ -723,8 +736,9 @@ function showMapView(strMapType) {
 
 function closeMapView() {
     //reset markers
-    g_pMarkerMe = null;
-    g_pMap      = null;
+    g_pMarkerMe     = null;
+    g_pMap          = null;
+    g_pNodeMarkers  = null;
     
     $("#divMapContainer").hide();
     toggleMessageView(false);
@@ -757,14 +771,9 @@ function convertToLocator(longitude, latitude) {
 function updateDeviceMarkers() {
     //variables
     ///////////
-    var blueIcon = new L.icon({iconUrl: '/images/marker-icon.png',
-        shadowUrl: '/images/marker-shadow.png'
-        });
-    var greenIcon = new L.icon({iconUrl: '/images/marker-icon-green.png',
-        shadowUrl: '/images/marker-shadow.png'
-    });
+    var blueIcon = new L.icon({iconUrl: '/images/marker-icon.png'});
+    var greenIcon = new L.icon({iconUrl: '/images/marker-icon-green.png'});
     var oNodeMarker = {};
-    
     
     g_pNodeMarkers = [];
     
@@ -776,7 +785,7 @@ function updateDeviceMarkers() {
             oNodeMarker.NodeID = g_aKnownNodes[i].NodeID;
             oNodeMarker.Marker = L.marker([parseFloat(g_aKnownNodes[i].posN), parseFloat(g_aKnownNodes[i].posE)], {icon: blueIcon});
             
-            oNodeMarker.Marker.addTo(g_pMap).bindPopup(
+            oNodeMarker.Marker.bindPopup(
                     "<b>" + g_aKnownNodes[i].DevName + "</b><br/>ID: " + 
                     g_aKnownNodes[i].NodeID + "<br/>Last Heard: " + g_aKnownNodes[i].LastHeard + "<br/>WGS84: " +
                     g_aKnownNodes[i].posN + ", " + g_aKnownNodes[i].posE + "<br/>Loc: " +
@@ -789,11 +798,13 @@ function updateDeviceMarkers() {
     
     
     if(g_bGpsValid === true) {
+        g_pMarkerMe = null;
+        
         if((parseFloat(g_fLocalLat) !== 0) && (parseFloat(g_fLocalLon) !== 0)) {
             
             g_pMarkerMe = L.marker([parseFloat(g_fLocalLat), parseFloat(g_fLocalLon)], {icon: greenIcon});
            
-            g_pMarkerMe.addTo(g_pMap).bindPopup(
+            g_pMarkerMe.bindPopup(
                 "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
                 g_dwNodeID + "<br/>WGS84: " +
                 g_fLocalLat + ", " + g_fLocalLon + "<br/>Loc: " +
@@ -805,9 +816,9 @@ function updateDeviceMarkers() {
         g_pMarkerMe = null;
         
         //add only if not set to 0/0
-        if((g_fConfigLat != 0) && (g_fConfigLon !== 0)) {
+        if((g_fConfigLat !== 0) && (g_fConfigLon !== 0)) {
             if((parseFloat(g_fConfigLat) !== 0) && (parseFloat(g_fConfigLon) !== 0)) {
-                L.marker([parseFloat(g_fConfigLat), parseFloat(g_fConfigLon)], {icon: greenIcon}).addTo(g_pMap).bindPopup(
+                g_pMarkerMe = L.marker([parseFloat(g_fConfigLat), parseFloat(g_fConfigLon)], {icon: greenIcon}).bindPopup(
                     "<b>" + $("#hfNodeName").val() + " (Me)</b><br/>ID: " + 
                     g_dwNodeID + "<br/>WGS84: " +
                     g_fConfigLat + ", " + g_fConfigLon + "<br/>Loc: " +
@@ -922,7 +933,7 @@ function onLoad() {
         //tiles on the device...
         document.addEventListener("tileLoaded", function(e) {
             
-            if(g_bOnlineTiles == true) {
+            if(g_bOnlineTiles === true) {
                 console.log("event src: " + e.detail); 
 
                 if(g_aTileCheck.indexOf(e.detail) === -1) {
@@ -967,16 +978,27 @@ async function tileCheck() {
                 g_bTileDownload = true;
                 console.log("tileCheck: check tile: " + g_aTileCheck[0]);
 
-                if(g_strMapView === "map") {
+                if(g_aTileCheck[0].toLowerCase().indexOf("tile.openstreetmap.org") > 0) {
                     //OSM returns an URL 
                     //get the image path 
                     //since the source is openstreetmap, search for .org
-                    strFile = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf(".org") + 4);
+                    strFile = g_aTileCheck[0].substring(g_aTileCheck[0].toLowerCase().indexOf(".org") + 4);
 
                     //try to create the path, don't care if it exist...
                     strFile = "/tiles" + strFile;
-                }
-                else {
+                };
+                
+                if(g_aTileCheck[0].toLowerCase().indexOf("/seamark/") > 0) {
+                    //OSM returns an URL 
+                    //get the image path 
+                    //since the source is openstreetmap, search for .org
+                    strFile = g_aTileCheck[0].substring(g_aTileCheck[0].toLowerCase().indexOf("/seamark/") + 8);
+
+                    //try to create the path, don't care if it exist...
+                    strFile = "/tiles_sea" + strFile;
+                };
+                
+                if(g_aTileCheck[0].toLowerCase().indexOf("google.com/") > 0) {
                     //get the image path 
                     //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
                     strX = g_aTileCheck[0].substring(g_aTileCheck[0].indexOf("x=") + 2, g_aTileCheck[0].indexOf("&", g_aTileCheck[0].indexOf("x=")));
@@ -987,47 +1009,57 @@ async function tileCheck() {
                     strFile = "/tiles_sat/" + strZ + "/" + strX + "/" + strY + ".png";
                 };
 
-                console.log("file: " + strFile);
+                
+                if(strFile.length > 0) {
+                    console.log("file: " + strFile);
 
-                //check if tile exist on the device
-                $.ajax({
-                    url: g_strServer + 'api/api.json',
-                    type: 'POST',
-                    data: '{"command": "fileExist", ' +
-                          ' "file": "' + strFile + '"' +
-                          '}',
-                    contentType: 'application/json; charset=utf-8',
-                    crossDomain: true,
-                    dataType: 'json',
-                    async: true,
-                    headers: {
-                        "accept": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
-                        "Access-Control-Allow-Methods": "GET, POST"
-                    },
-                    success: async function(msg) {
+                    //check if tile exist on the device
+                    $.ajax({
+                        url: g_strServer + 'api/api.json',
+                        type: 'POST',
+                        data: '{"command": "fileExist", ' +
+                              ' "file": "' + strFile + '"' +
+                              '}',
+                        contentType: 'application/json; charset=utf-8',
+                        crossDomain: true,
+                        dataType: 'json',
+                        async: true,
+                        headers: {
+                            "accept": "application/json",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Headers": "Content-Type, Accept, x-requested-with, x-requested-by",
+                            "Access-Control-Allow-Methods": "GET, POST"
+                        },
+                        success: async function(msg) {
 
-                        console.log(JSON.stringify(msg));
+                            console.log(JSON.stringify(msg));
 
-                        if(msg["response"] === "ERR") {
-                            if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
-                                g_aTileDownloader.push(g_aTileCheck[0]);
-                            };        
-                        };
+                            if(msg["response"] === "ERR") {
+                                if(g_aTileDownloader.indexOf(g_aTileCheck[0]) === -1) {
+                                    g_aTileDownloader.push(g_aTileCheck[0]);
+                                };        
+                            };
 
-                        //remove tile from array
-                        g_aTileCheck.splice(0, 1);
-                        
-                        g_bTileDownload = false;
-                    },
-                    error: function (msg) {
+                            //remove tile from array
+                            g_aTileCheck.splice(0, 1);
 
-                        console.log(JSON.stringify(msg));
-                        
-                        g_bTileDownload = false;
-                    }
-                });
+                            g_bTileDownload = false;
+                        },
+                        error: function (msg) {
+
+                            console.log(JSON.stringify(msg));
+
+                            g_bTileDownload = false;
+                        }
+                    });
+                }
+                else {
+                    console.log("Unable to figure out which map was used");
+
+                    g_aTileCheck.splice(0, 1);
+                    
+                    g_bTileDownload = false;
+                };
             };
         }
         else {
@@ -1037,7 +1069,7 @@ async function tileCheck() {
                 }; 
                 
                 g_aTileCheck.splice(0, 1);
-            };  
+            }; 
         };
         
         
@@ -1074,16 +1106,29 @@ async function tileDownloader() {
             
             g_bTileDownload = true;
             
-            if(g_strMapView === "map") {
+            if(g_aTileDownloader[0].toLowerCase().indexOf("tile.openstreetmap.org") > 0) {
                 //OSM returns an URL 
                 //get the image path 
                 //since the source is openstreetmap, search for .org
-                strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf(".org") + 4);
+                strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].toLowerCase().indexOf(".org") + 4);
 
                 //try to create the path, don't care if it exist...
                 strFile = "/tiles" + strFile;
-            }
-            else {
+            };
+            
+            
+            if(g_aTileDownloader[0].toLowerCase().indexOf("/seamark/") > 0) {
+                //OSM returns an URL 
+                //get the image path 
+                //since the source is openstreetmap, search for .org
+                strFile = g_aTileDownloader[0].substring(g_aTileDownloader[0].toLowerCase().indexOf("/seamark/") + 8);
+
+                //try to create the path, don't care if it exist...
+                strFile = "/tiles_sea" + strFile;
+            };
+            
+            
+            if(g_aTileDownloader[0].toLowerCase().indexOf("google.com/") > 0) {
                 //get the image path 
                 //since the source is google: http://mt0.google.com/vt/lyrs=s&x=19&y=13&z=5
                 strX = g_aTileDownloader[0].substring(g_aTileDownloader[0].indexOf("x=") + 2, g_aTileDownloader[0].indexOf("&", g_aTileDownloader[0].indexOf("x=")));
@@ -1095,57 +1140,64 @@ async function tileDownloader() {
             };
    
 
-            while((nIdx < strFile.length) && (bErr === false)) {
-                strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
-                nIdx    = strFile.indexOf("/", nIdx + 1);
+            if(strFile.length > 0) {
+                while((nIdx < strFile.length) && (bErr === false)) {
+                    strPath = strFile.substring(0, strFile.indexOf("/", nIdx + 1));
+                    nIdx    = strFile.indexOf("/", nIdx + 1);
 
-                if(nIdx < 0) {
-                    break;
-                };
+                    if(nIdx < 0) {
+                        break;
+                    };
 
-                if((strPath !== "/tiles") || (strPath !== "/tiles_sat")) {
+                    if((strPath !== "/tiles") || (strPath !== "/tiles_sat")) {
 
-                    strFolder = strPath;
-                    console.log("Create dir: " + strPath);
+                        strFolder = strPath;
+                        console.log("Create dir: " + strPath);
 
-                    try {
-                        $.ajax({
-                            url: g_strServer + 'api/api.json',
-                            type: 'POST',
-                            crossDomain: true,
-                            data: '{"command": "createFolder", ' +
-                                  ' "NewFolder": "' + strPath + '", ' +
-                                  ' "Folder": ""}',
-                            contentType: 'application/json; charset=utf-8',
-                            dataType: 'json',
-                            async: false,
-                            success: function(msg) {
+                        try {
+                            $.ajax({
+                                url: g_strServer + 'api/api.json',
+                                type: 'POST',
+                                crossDomain: true,
+                                data: '{"command": "createFolder", ' +
+                                      ' "NewFolder": "' + strPath + '", ' +
+                                      ' "Folder": ""}',
+                                contentType: 'application/json; charset=utf-8',
+                                dataType: 'json',
+                                async: false,
+                                success: function(msg) {
+                                    console.log("folder created: " + strPath);
+                                },
+                                error: function (msg) {
+                                    console.log("Error create folder:");
 
-                            },
-                            error: function (msg) {
-                                console.log("Error create folder:");
+                                    console.log(JSON.stringify(msg));
 
-                                console.log(JSON.stringify(msg));
+                                    g_bTileDownload = false;
+                                    bErr            = true;
+                                }
+                            });     
+                        }
+                        catch(Exception) {
+                            console.log(Exception);
 
-                                g_bTileDownload = false;
-                                bErr            = true;
-                            }
-                        });     
-                    }
-                    catch(Exception) {
-                        console.log(Exception);
-
-                        g_bTileDownload = false;
-                        bErr            = true;
+                            g_bTileDownload = false;
+                            bErr            = true;
+                        };
                     };
                 };
-            };
 
-            if(bErr === false) {
-                //path should exist now, download the file
-                if(await downloadImage(strFolder, strFile, g_aTileDownloader[0]) === true) {
-                    g_aTileDownloader.splice(0, 1);
+                if(bErr === false) {
+                    //path should exist now, download the file
+                    if(await downloadImage(strFolder, strFile, g_aTileDownloader[0]) === true) {
+                        g_aTileDownloader.splice(0, 1);
+                    };
                 };
+            }
+            else {
+                console.log("Unable to identify map");
+                
+                g_aTileDownloader.splice(0, 1);
             };
             
             g_bTileDownload = false;
@@ -1179,26 +1231,52 @@ async function downloadImage(strPath, strFile, imageSrc) {
         const form          = document.getElementById("frmFileUpload");
         const fileInput     = document.getElementById('file');
         const dataTransfer  = new DataTransfer();
-        const image         = await fetch(imageSrc);
-        const imageBlob     = await image.blob();
         var strFileName     = strFile.replace(strPath, "");
-        const file          = new File([imageBlob], strFileName.substring(1), { type: imageBlob.type });
+        
 
 
         console.log("Save data from " + imageSrc + " to folder: " + strPath + " file: " + strFileName.substring(1));
-
-        dataTransfer.items.add(file);
-        fileInput.files = dataTransfer.files;
-
-        var fd = new FormData(form);
-        const res = await uploadFile(fd, strPath); 
-
-        //update progress bar
-        $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
-        $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileDownloader.length) * 100) + "%");
         
-        g_bTileDownload = false; 
-    
+        
+        const image         = await fetch(imageSrc, {
+            method: "GET",
+            headers: {
+            }
+        }).then((response)=> { 
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            };
+
+            return response; 
+        });
+        const imageBlob     = await image.blob();
+        const file          = new File([imageBlob], strFileName.substring(1), { type: imageBlob.type });
+
+        if(file.size > 0) {
+            dataTransfer.items.add(file);
+            fileInput.files = dataTransfer.files;
+
+            var fd = new FormData(form);
+            const res = await uploadFile(fd, strPath); 
+
+            //update progress bar
+            $("#pbTileDownloader").attr("aria-valuenow", parseInt($("#pbTileDownloader").attr("aria-valuenow")) + 1);
+            $("#pbTileDownloader").css("width", ((parseInt($("#pbTileDownloader").attr("aria-valuenow")) / g_aTileDownloader.length) * 100) + "%");
+
+            g_bTileDownload = false; 
+            
+            console.log(strFileName + ": upload complete...");
+
+            return true;
+        }
+        else {
+            console.log(strFileName + ": empty file...");
+            
+            g_bTileDownload = false;
+            
+            return true;
+        };
+        
         return true;
     }
     catch(Exception) {
@@ -1221,14 +1299,21 @@ async function downloadImage(strPath, strFile, imageSrc) {
  * @returns {unresolved}
  */
 async function uploadFile(formData, strPath) {
+    
+    console.log("Start Upload to: " + strPath);
+    
     try {
-        return fetch("/upload?folder=" + encodeURI(strPath),
+        const resp = await fetch("/upload?folder=" + encodeURI(strPath),
             {
               method: 'POST',
               body: formData
             }
         )
-        .then((response)=> { return response; });
+        .then((response)=> { 
+            return true; 
+        });
+        
+        return true;
     }
     catch(Exception) {
         console.log(Exception);
@@ -1619,7 +1704,7 @@ function loadKnownDevices(bUpdateOnly, bCreateMapLabels) {
         contentType: 'application/json; charset=utf-8',
         crossDomain: true,
         dataType: 'json',
-        async: true,
+        async: (bCreateMapLabels === true ? false : true),
         headers: {
             "accept": "application/json",
             "Access-Control-Allow-Origin": "*",
@@ -1631,11 +1716,11 @@ function loadKnownDevices(bUpdateOnly, bCreateMapLabels) {
 
             g_aKnownNodes = msg["Nodes"];
             
-            if(bUpdateOnly == false) {
+            if(bUpdateOnly === false) {
                 loadFinished();
             };
             
-            if(bCreateMapLabels == true) {
+            if(bCreateMapLabels === true) {
                 updateDeviceMarkers();
             };
         },
@@ -2670,6 +2755,7 @@ function showManagePOI() {
     
     $("#tbPoiDataBody").html("");
     $("#dlgPoiManagement").modal("show");
+
     
     fetch('/poidata/' + $("#hfUserID").val() + '.json', {
         method: 'GET',
@@ -2698,36 +2784,11 @@ function showManagePOI() {
 };
 
 
-/**
- * this function will be called, when the check box in the POI manager
- * was clicked. If the map is actually open, it will re-add the pois
- * 
- * @returns {undefined}
- */
-function showPOIS() {
- 
-    if(g_pMap !== null) {
-        for(var n = 0; n < g_aPois.length; ++n) {
-            g_pMap.removeLayer(g_aPois[n]);
-        };
-    };
-    
+
+async function loadPoisCreateMarker() {
     g_aPois = [];
- 
-    if(($("#chkShowPOI").prop("checked") === true) && (g_pMap !== null)) {
-        addPoisOnMap();
-    };
-};
-
-
-/**
- * this function adds the pois to the map
- * 
- * @returns {undefined}
- */
-function addPoisOnMap() {
     
-    fetch('/poidata/' + $("#hfUserID").val() + '.json', {
+    const res = await fetch('/poidata/' + $("#hfUserID").val() + '.json', {
         method: 'GET',
         headers: {
             'Accept': 'application/json'
@@ -2738,21 +2799,22 @@ function addPoisOnMap() {
         console.log(JSON.stringify(response));
        
         for(var n = 0; n < response["pois"].length; ++n) {
-
-            var mapicon = new L.icon({iconUrl: response["pois"][n].Icon,
-                shadowUrl: '/images/marker-shadow.png'
-            });
+            //create the markers for the map
+            var mapicon = new L.icon({iconUrl: response["pois"][n].Icon});
     
-            var marker = L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).addTo(g_pMap).bindPopup(
+            var marker = L.marker([parseFloat(response["pois"][n].Latitude), parseFloat(response["pois"][n].Longitude)], {icon: mapicon}).bindPopup(
                 "<b>POI:</b><br/>" + decodeURI(response["pois"][n].Desc) + "<br/>WGS84: " +
                 response["pois"][n].Latitude + ", " + response["pois"][n].Longitude + "<br/>Loc: " +
                 convertToLocator(response["pois"][n].Longitude, response["pois"][n].Latitude));
         
             g_aPois.push(marker);
         };
+        
+        return true;
    });
+   
+   return res;
 };
-
 
 
 

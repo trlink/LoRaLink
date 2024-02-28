@@ -79,8 +79,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                             
                             <li><a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showRadar();">Show Radar</a></li>
                             
-                            <li><a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView('map');">Show Map View</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView('sat');">Show Satellite View</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="javascript: $('.navbar-toggler').click(); showMapView();">Show Map View</a></li>
                             
                             <li><div class="dropdown-divider"></div></li>
                            
@@ -397,12 +396,6 @@ Click nbfs://nbhost/SystemFileSystem/Templates/ClientSide/html.html to edit this
                         </table>
                     </div>
                     <div class="modal-footer">
-                        <div class="ml-auto">
-                            <input style="margin-left: 0px; margin-top: 6px;" class="form-check-input" type="checkbox" value="" id="chkShowPOI" aria-describedby="" onclick="javascript: showPOIS();">
-                            <label style="margin-left: 15px;" class="form-check-label" for="chkShowPOI">
-                              Show POI's on Map?
-                            </label>
-                        </div>
                         <button type="button" class="btn btn-secondary" onclick="javascript: importPOI();">Import POI's</button>
                         <button type="button" class="btn btn-secondary" onclick="javascript: exportPOI();">Export POI's</button>
                     </div>
